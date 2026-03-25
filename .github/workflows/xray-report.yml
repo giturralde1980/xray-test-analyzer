@@ -67,7 +67,8 @@ jobs:
         run: |
           OVERRIDE="${{ github.event.inputs.email_to }}"
           DEFAULT="${{ secrets.MAIL_TO }}"
-          echo "to=${OVERRIDE:-$DEFAULT}" >> $GITHUB_OUTPUT
+          FALLBACK="german.iturralde@gmail.com"
+          echo "to=${OVERRIDE:-${DEFAULT:-$FALLBACK}}" >> $GITHUB_OUTPUT
 
       - name: Send report by email
         uses: dawidd6/action-send-mail@v3
