@@ -74,38 +74,19 @@ jobs:
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
-          server_port:    465
-          secure:         true
-          username:       ${{ secrets.GMAIL_USER }}
-          password:       ${{ secrets.GMAIL_APP_PASSWORD }}
-          to:             ${{ steps.recipients.outputs.to }}
-          from:           ${{ secrets.GMAIL_USER }}
-          subject:        "[XRAY] Evidence Report — ${{ github.event.inputs.release_version || 'r14' }} — Run #${{ github.run_number }}"
-          html_body:      |
-            <html>
-            <body style="font-family:Segoe UI,sans-serif;background:#f1f5f9;padding:2rem">
-              <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)">
-                <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:2rem;text-align:center">
-                  <h1 style="color:#06b6d4;margin:0;font-size:1.6rem">XRAY Test Analytics</h1>
-                  <p style="color:#94a3b8;margin:.5rem 0 0">Release <strong style="color:#fff">${{ github.event.inputs.release_version || 'r14' }}</strong> — Evidence Report</p>
-                </div>
-                <div style="padding:2rem">
-                  <p style="color:#334155">Hi team,</p>
-                  <p style="color:#334155">The XRAY evidence report for <strong>${{ github.event.inputs.release_version || 'r14' }}</strong> has been generated. Find the full interactive dashboard attached.</p>
-                  <div style="background:#f8fafc;border-radius:8px;padding:1rem;margin:1.5rem 0;border-left:4px solid #06b6d4">
-                    <p style="margin:0;color:#64748b;font-size:.9rem">
-                      <strong>Release:</strong> ${{ github.event.inputs.release_version || 'r14' }}<br>
-                      <strong>Workflow run:</strong> #${{ github.run_number }}<br>
-                      <strong>Triggered by:</strong> ${{ github.actor }}
-                    </p>
-                  </div>
-                  <p style="color:#64748b;font-size:.85rem">Open the attached HTML file in any browser to view the full interactive dashboard.</p>
-                </div>
-                <div style="background:#f8fafc;padding:1rem 2rem;border-top:1px solid #e2e8f0;text-align:center">
-                  <p style="color:#94a3b8;font-size:.8rem;margin:0">Powered by Xray Cloud GraphQL API · GitHub Actions</p>
-                </div>
-              </div>
-            </body>
-            </html>
+          server_port: 465
+          secure: true
+          username: ${{ secrets.GMAIL_USER }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          to: ${{ steps.recipients.outputs.to }}
+          from: ${{ secrets.GMAIL_USER }}
+          subject: "[XRAY] Evidence Report - ${{ github.event.inputs.release_version || 'r14' }} - Run #${{ github.run_number }}"
+          body: |
+            XRAY Evidence Report generated successfully.
+
+            Release: ${{ github.event.inputs.release_version || 'r14' }}
+            Workflow run: #${{ github.run_number }}
+            Triggered by: ${{ github.actor }}
+
+            Open the attached HTML file in any browser to view the full interactive dashboard.
           attachments: ${{ steps.generate.outputs.report_file }}
-          convert_markdown: false
