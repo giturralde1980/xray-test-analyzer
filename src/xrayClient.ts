@@ -32,7 +32,7 @@ async function fetchTestExecutionsPage(
   options: { authToken: string; jql: string; start: number; pageSize: number; xrayApiBaseUrl: string }
 ): Promise<TestExecutionResult> {
   const { authToken, jql, start, pageSize, xrayApiBaseUrl } = options;
-  const escapedJql = jql.replace(/\"/g, '\\"');
+  const escapedJql = jql.trim().replace(/\"/g, '\\"');
   const query = `{
     getTestExecutions(
       jql: "${escapedJql}"

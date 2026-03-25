@@ -58,9 +58,6 @@ jobs:
           XRAY_JQL:            ${{ secrets.XRAY_JQL }}
           OUTPUT_FILE:         output/report.html
         run: |
-          echo "DEBUG JQL length: ${#XRAY_JQL}"
-          echo "DEBUG JQL first 20 chars: ${XRAY_JQL:0:20}"
-          echo "DEBUG JQL last 10 chars: ${XRAY_JQL: -10}"
           mkdir -p output
           npm start
           echo "report_file=$(ls -t output/report-*.html | head -1)" >> $GITHUB_OUTPUT
