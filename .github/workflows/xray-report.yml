@@ -62,13 +62,6 @@ jobs:
           npm start
           echo "report_file=$(ls -t output/report-*.html | head -1)" >> $GITHUB_OUTPUT
 
-      - name: Upload report as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: xray-report-${{ github.event.inputs.release_version || 'r14' }}-${{ github.run_number }}
-          path: ${{ steps.generate.outputs.report_file }}
-          retention-days: 30
-
       - name: Resolve email recipients
         id: recipients
         run: |
