@@ -1,0 +1,116 @@
+name: XRAY Evidence Report
+
+on:
+  # Manual trigger — most flexible, lets you pick release on demand
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g. r14, r15)'
+        required: true
+        default: 'r14'
+      email_to:
+        description: 'Recipients (comma-separated, overrides default)'
+        required: false
+        default: ''
+      use_sample_data:
+        description: 'Use sample data instead of real Xray API'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+  # Scheduled run — every Monday at 8am UTC
+  # Uncomment and adjust when ready for automation
+  # schedule:
+  #   - cron: '0 8 * * 1'
+
+jobs:
+  generate-and-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Generate report
+        env:
+          RELEASE_VERSION:     ${{ github.event.inputs.release_version || 'r14' }}
+          USE_SAMPLE_DATA:     ${{ github.event.inputs.use_sample_data || 'false' }}
+          XRAY_API_BASE_URL:   ${{ secrets.XRAY_API_BASE_URL }}
+          XRAY_CLIENT_ID:      ${{ secrets.XRAY_CLIENT_ID }}
+          XRAY_CLIENT_SECRET:  ${{ secrets.XRAY_CLIENT_SECRET }}
+          XRAY_JQL:            ${{ secrets.XRAY_JQL }}
+          OUTPUT_FILE:         output/report.html
+        run: |
+          mkdir -p output
+          npm start
+          echo "REPORT_FILE=$(ls -t output/report-*.html | head -1)" >> $GITHUB_ENV
+
+      - name: Upload report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray-report-${{ github.event.inputs.release_version || 'r14' }}-${{ github.run_number }}
+          path: ${{ env.REPORT_FILE }}
+          retention-days: 30
+
+      - name: Resolve email recipients
+        id: recipients
+        run: |
+          OVERRIDE="${{ github.event.inputs.email_to }}"
+          DEFAULT="${{ secrets.MAIL_TO }}"
+          echo "to=${OVERRIDE:-$DEFAULT}" >> $GITHUB_OUTPUT
+
+      - name: Send report by email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port:    ${{ secrets.MAIL_PORT }}
+          username:       ${{ secrets.MAIL_USERNAME }}
+          password:       ${{ secrets.MAIL_PASSWORD }}
+          secure:         true
+          to:             ${{ steps.recipients.outputs.to }}
+          from:           XRAY Analytics <${{ secrets.MAIL_USERNAME }}>
+          subject:        "[XRAY] Evidence Report — ${{ github.event.inputs.release_version || 'r14' }} — Run #${{ github.run_number }}"
+          html_body:      |
+            <html>
+            <body style="font-family:Segoe UI,sans-serif;background:#f1f5f9;padding:2rem">
+              <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)">
+                <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:2rem;text-align:center">
+                  <h1 style="color:#06b6d4;margin:0;font-size:1.6rem">XRAY Test Analytics</h1>
+                  <p style="color:#94a3b8;margin:.5rem 0 0">Release <strong style="color:#fff">${{ github.event.inputs.release_version || 'r14' }}</strong> — Evidence Report</p>
+                </div>
+                <div style="padding:2rem">
+                  <p style="color:#334155">Hi team,</p>
+                  <p style="color:#334155">The XRAY evidence report for <strong>${{ github.event.inputs.release_version || 'r14' }}</strong> has been generated. Find the full interactive dashboard attached.</p>
+                  <div style="background:#f8fafc;border-radius:8px;padding:1rem;margin:1.5rem 0;border-left:4px solid #06b6d4">
+                    <p style="margin:0;color:#64748b;font-size:.9rem">
+                      <strong>Generated:</strong> ${{ github.run_id }}<br>
+                      <strong>Workflow run:</strong> #${{ github.run_number }}<br>
+                      <strong>Triggered by:</strong> ${{ github.actor }}
+                    </p>
+                  </div>
+                  <p style="color:#64748b;font-size:.85rem">Open the attached HTML file in any browser to view the full interactive dashboard.</p>
+                </div>
+                <div style="background:#f8fafc;padding:1rem 2rem;border-top:1px solid #e2e8f0;text-align:center">
+                  <p style="color:#94a3b8;font-size:.8rem;margin:0">Powered by Xray Cloud GraphQL API · GitHub Actions</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          attachments: ${{ env.REPORT_FILE }}
+          convert_markdown: false
