@@ -48,6 +48,7 @@ jobs:
         run: npm run build
 
       - name: Generate report
+        id: generate
         env:
           RELEASE_VERSION:     ${{ github.event.inputs.release_version || 'r14' }}
           USE_SAMPLE_DATA:     ${{ github.event.inputs.use_sample_data || 'false' }}
@@ -59,13 +60,13 @@ jobs:
         run: |
           mkdir -p output
           npm start
-          echo "REPORT_FILE=$(ls -t output/report-*.html | head -1)" >> $GITHUB_ENV
+          echo "report_file=$(ls -t output/report-*.html | head -1)" >> $GITHUB_OUTPUT
 
       - name: Upload report as artifact
         uses: actions/upload-artifact@v4
         with:
           name: xray-report-${{ github.event.inputs.release_version || 'r14' }}-${{ github.run_number }}
-          path: ${{ env.REPORT_FILE }}
+          path: ${{ steps.generate.outputs.report_file }}
           retention-days: 30
 
       - name: Resolve email recipients
@@ -78,13 +79,13 @@ jobs:
       - name: Send report by email
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: ${{ secrets.MAIL_SERVER }}
-          server_port:    ${{ secrets.MAIL_PORT }}
-          username:       ${{ secrets.MAIL_USERNAME }}
-          password:       ${{ secrets.MAIL_PASSWORD }}
+          server_address: smtp.gmail.com
+          server_port:    465
           secure:         true
+          username:       ${{ secrets.GMAIL_USER }}
+          password:       ${{ secrets.GMAIL_APP_PASSWORD }}
           to:             ${{ steps.recipients.outputs.to }}
-          from:           XRAY Analytics <${{ secrets.MAIL_USERNAME }}>
+          from:           ${{ secrets.GMAIL_USER }}
           subject:        "[XRAY] Evidence Report — ${{ github.event.inputs.release_version || 'r14' }} — Run #${{ github.run_number }}"
           html_body:      |
             <html>
@@ -99,7 +100,7 @@ jobs:
                   <p style="color:#334155">The XRAY evidence report for <strong>${{ github.event.inputs.release_version || 'r14' }}</strong> has been generated. Find the full interactive dashboard attached.</p>
                   <div style="background:#f8fafc;border-radius:8px;padding:1rem;margin:1.5rem 0;border-left:4px solid #06b6d4">
                     <p style="margin:0;color:#64748b;font-size:.9rem">
-                      <strong>Generated:</strong> ${{ github.run_id }}<br>
+                      <strong>Release:</strong> ${{ github.event.inputs.release_version || 'r14' }}<br>
                       <strong>Workflow run:</strong> #${{ github.run_number }}<br>
                       <strong>Triggered by:</strong> ${{ github.actor }}
                     </p>
@@ -112,5 +113,5 @@ jobs:
               </div>
             </body>
             </html>
-          attachments: ${{ env.REPORT_FILE }}
+          attachments: ${{ steps.generate.outputs.report_file }}
           convert_markdown: false
