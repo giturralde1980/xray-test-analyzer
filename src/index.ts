@@ -88,56 +88,56 @@ function generateHtmlReport(data: ReportData): string {
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);color:#fff;padding:2rem;min-height:100vh}
+    body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f1f5f9;color:#1e293b;padding:2rem;min-height:100vh}
     .container{max-width:1600px;margin:0 auto}
-    .header{margin-bottom:3rem;background:linear-gradient(135deg,rgba(6,182,212,.1) 0%,rgba(59,130,246,.1) 100%);padding:2rem;border-radius:20px;border:1px solid rgba(6,182,212,.3);backdrop-filter:blur(10px)}
+    .header{margin-bottom:3rem;background:linear-gradient(135deg,rgba(6,182,212,.08) 0%,rgba(59,130,246,.08) 100%);padding:2rem;border-radius:20px;border:1px solid rgba(6,182,212,.25);backdrop-filter:blur(10px)}
     .header-content{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem}
     h1{font-size:2.5rem;background:linear-gradient(135deg,#06b6d4 0%,#3b82f6 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:900}
-    .header-subtitle{color:#94a3b8;margin-top:.5rem;font-size:1.1rem}
+    .header-subtitle{color:#64748b;margin-top:.5rem;font-size:1.1rem}
     .total-count{text-align:right}
     .total-count-number{font-size:3rem;font-weight:900;color:#06b6d4}
-    .total-count-label{color:#94a3b8;font-size:.9rem;margin-top:.5rem}
+    .total-count-label{color:#64748b;font-size:.9rem;margin-top:.5rem}
     .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.5rem;margin-bottom:3rem}
-    .kpi-card{padding:1.5rem;border-radius:15px;border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(10px);transition:all .3s ease;position:relative;overflow:hidden}
+    .kpi-card{padding:1.5rem;border-radius:15px;border:1px solid rgba(0,0,0,.08);background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:all .3s ease;position:relative;overflow:hidden}
     .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#06b6d4,#3b82f6)}
-    .kpi-card:hover{transform:translateY(-5px);border-color:rgba(6,182,212,.5)}
-    .kpi-card.pass{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.3)}
+    .kpi-card:hover{transform:translateY(-5px);border-color:rgba(6,182,212,.4);box-shadow:0 4px 12px rgba(6,182,212,.12)}
+    .kpi-card.pass{background:#f0fdf4;border-color:rgba(16,185,129,.25)}
     .kpi-card.pass::before{background:#10b981}
-    .kpi-card.evidence{background:rgba(3,105,161,.1);border-color:rgba(3,105,161,.3)}
+    .kpi-card.evidence{background:#f0f9ff;border-color:rgba(3,105,161,.25)}
     .kpi-card.evidence::before{background:#0369a1}
-    .kpi-card.executing{background:rgba(139,92,246,.1);border-color:rgba(139,92,246,.3)}
+    .kpi-card.executing{background:#faf5ff;border-color:rgba(139,92,246,.25)}
     .kpi-card.executing::before{background:#8b5cf6}
-    .kpi-card.pending{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3)}
+    .kpi-card.pending{background:#fffbeb;border-color:rgba(245,158,11,.25)}
     .kpi-card.pending::before{background:#f59e0b}
-    .kpi-card.duration{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3)}
+    .kpi-card.duration{background:#fff5f5;border-color:rgba(239,68,68,.25)}
     .kpi-card.duration::before{background:#ef4444}
-    .kpi-card.failed{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3)}
+    .kpi-card.failed{background:#fff5f5;border-color:rgba(239,68,68,.25)}
     .kpi-card.failed::before{background:#ef4444}
-    .kpi-label{color:#94a3b8;font-size:.85rem;font-weight:600;margin-bottom:.8rem;text-transform:uppercase;letter-spacing:1px}
+    .kpi-label{color:#64748b;font-size:.85rem;font-weight:600;margin-bottom:.8rem;text-transform:uppercase;letter-spacing:1px}
     .kpi-value{font-size:2.5rem;font-weight:900;margin-bottom:.5rem}
-    .kpi-subtext{color:#64748b;font-size:.85rem}
+    .kpi-subtext{color:#94a3b8;font-size:.85rem}
     .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(500px,1fr));gap:2rem;margin-bottom:3rem}
-    .chart-container{background:rgba(30,41,59,.8);border:1px solid rgba(148,163,184,.2);border-radius:20px;padding:2rem;backdrop-filter:blur(10px);transition:all .3s ease}
-    .chart-container:hover{border-color:rgba(6,182,212,.5);box-shadow:0 0 20px rgba(6,182,212,.1)}
-    .chart-title{font-size:1.5rem;font-weight:700;margin-bottom:1.5rem;color:#06b6d4}
+    .chart-container{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:2rem;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:all .3s ease}
+    .chart-container:hover{border-color:rgba(6,182,212,.4);box-shadow:0 4px 16px rgba(6,182,212,.1)}
+    .chart-title{font-size:1.5rem;font-weight:700;margin-bottom:1.5rem;color:#0284c7}
     .chart-wrapper{position:relative;height:400px}
-    .metric-box{background:rgba(15,23,42,.5);padding:1rem;border-radius:10px;margin:.5rem 0;border-left:3px solid #06b6d4}
+    .metric-box{background:#f8fafc;padding:1rem;border-radius:10px;margin:.5rem 0;border-left:3px solid #06b6d4}
     .metric-box.high{border-left-color:#10b981}
     .metric-box.warning{border-left-color:#f59e0b}
-    .metric-name{color:#94a3b8;font-size:.9rem;margin-bottom:.3rem}
-    .metric-value{font-size:1.8rem;font-weight:900;color:#06b6d4}
+    .metric-name{color:#64748b;font-size:.9rem;margin-bottom:.3rem}
+    .metric-value{font-size:1.8rem;font-weight:900;color:#0284c7}
     .metric-box.high .metric-value{color:#10b981}
     .metric-box.warning .metric-value{color:#f59e0b}
-    .table-container{background:rgba(30,41,59,.8);border:1px solid rgba(148,163,184,.2);border-radius:20px;padding:2rem;backdrop-filter:blur(10px);overflow-x:auto;margin-bottom:3rem}
-    .table-title{font-size:1.5rem;font-weight:700;margin-bottom:.5rem;color:#06b6d4}
+    .table-container{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:2rem;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow-x:auto;margin-bottom:3rem}
+    .table-title{font-size:1.5rem;font-weight:700;margin-bottom:.5rem;color:#0284c7}
     .table-subtitle{color:#64748b;font-size:.9rem;margin-bottom:1.5rem}
     table{width:100%;border-collapse:collapse}
-    th{background:rgba(15,23,42,.5);padding:1rem;text-align:left;color:#94a3b8;font-weight:600;font-size:.9rem;text-transform:uppercase;border-bottom:2px solid rgba(6,182,212,.3)}
-    td{padding:1rem;border-bottom:1px solid rgba(148,163,184,.1);color:#cbd5e1;font-size:.9rem}
+    th{background:#f8fafc;padding:1rem;text-align:left;color:#64748b;font-weight:600;font-size:.9rem;text-transform:uppercase;border-bottom:2px solid rgba(6,182,212,.3)}
+    td{padding:1rem;border-bottom:1px solid rgba(0,0,0,.06);color:#334155;font-size:.9rem}
     tr:hover td{background:rgba(6,182,212,.05)}
-    tr.zero-dur td{background:rgba(239,68,68,.22);border-top:1px solid rgba(239,68,68,.4);border-bottom:1px solid rgba(239,68,68,.4)}
+    tr.zero-dur td{background:rgba(239,68,68,.08);border-top:1px solid rgba(239,68,68,.3);border-bottom:1px solid rgba(239,68,68,.3)}
     .badge{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.8rem;font-weight:600}
-    .footer{display:flex;justify-content:space-between;align-items:center;padding-top:2rem;border-top:1px solid rgba(148,163,184,.2);color:#64748b;font-size:.9rem;margin-top:3rem}
+    .footer{display:flex;justify-content:space-between;align-items:center;padding-top:2rem;border-top:1px solid rgba(0,0,0,.08);color:#64748b;font-size:.9rem;margin-top:3rem}
     .footer-left p,.footer-right p{margin-bottom:.5rem}
     .footer-right{text-align:right}
     @media(max-width:1200px){.charts-grid{grid-template-columns:1fr}}
@@ -188,6 +188,7 @@ function generateHtmlReport(data: ReportData): string {
       <div class="kpi-card duration">
         <div class="kpi-label">Avg Duration</div>
         <div class="kpi-value">${data.avgDuration.toFixed(1)}m</div>
+        <div style="font-size:.75rem;color:#94a3b8;margin-top:.15rem;margin-bottom:.1rem">${(data.avgDuration / 60).toFixed(2)}h</div>
         <div class="kpi-subtext">Per execution</div>
       </div>
     </div>
@@ -275,9 +276,9 @@ function generateHtmlReport(data: ReportData): string {
       purple: '#8b5cf6',
       red:    '#ef4444',
       blue:   '#3b82f6',
-      muted:  'rgba(148,163,184,0.1)',
-      tick:   '#94a3b8',
-      bg:     '#0f172a'
+      muted:  'rgba(100,116,139,0.12)',
+      tick:   '#64748b',
+      bg:     '#ffffff'
     };
 
     new Chart(document.getElementById('statusChart'), {
@@ -293,7 +294,7 @@ function generateHtmlReport(data: ReportData): string {
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 12 } } } }
+        plugins: { legend: { position: 'bottom', labels: { color: '#475569', font: { size: 12 } } } }
       }
     });
 
@@ -311,7 +312,7 @@ function generateHtmlReport(data: ReportData): string {
       },
       options: {
         responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-        plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 12 } } } },
+        plugins: { legend: { labels: { color: '#475569', font: { size: 12 } } } },
         scales: {
           x: { ticks: { color: C.tick }, grid: { color: C.muted } },
           y: { ticks: { color: C.tick }, grid: { color: C.muted } }
@@ -331,7 +332,7 @@ function generateHtmlReport(data: ReportData): string {
       },
       options: {
         responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-        plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 12 } } } },
+        plugins: { legend: { labels: { color: '#475569', font: { size: 12 } } } },
         scales: {
           x: { stacked: true, ticks: { color: C.tick }, grid: { color: C.muted } },
           y: { stacked: true, ticks: { color: C.tick }, grid: { color: C.muted } }
@@ -355,7 +356,7 @@ function generateHtmlReport(data: ReportData): string {
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 12 } } } },
+        plugins: { legend: { labels: { color: '#475569', font: { size: 12 } } } },
         scales: {
           x: { ticks: { color: C.tick }, grid: { color: C.muted } },
           y: { ticks: { color: C.tick }, grid: { color: C.muted } }
@@ -389,14 +390,14 @@ function generateHtmlReport(data: ReportData): string {
     }
 
     function btnStyle(disabled) {
-      return \`style="padding:.4rem .9rem;border-radius:8px;border:1px solid \${disabled ? 'rgba(148,163,184,.2)' : 'rgba(6,182,212,.5)'};background:\${disabled ? 'rgba(15,23,42,.3)' : 'rgba(6,182,212,.1)'};color:\${disabled ? '#475569' : '#06b6d4'};cursor:\${disabled ? 'default' : 'pointer'};font-size:.85rem"\`;
+      return \`style="padding:.4rem .9rem;border-radius:8px;border:1px solid \${disabled ? 'rgba(148,163,184,.35)' : 'rgba(6,182,212,.5)'};background:\${disabled ? '#f1f5f9' : 'rgba(6,182,212,.08)'};color:\${disabled ? '#94a3b8' : '#0284c7'};cursor:\${disabled ? 'default' : 'pointer'};font-size:.85rem"\`;
     }
 
     function renderPaginator(id) {
       const tp = totalPages();
       document.getElementById(id).innerHTML = \`
         <button \${btnStyle(currentPage === 1)} \${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(\${currentPage - 1})">&#8592; Prev</button>
-        <span>Page <strong style="color:#cbd5e1">\${currentPage}</strong> of <strong style="color:#cbd5e1">\${tp}</strong> &nbsp;·&nbsp; \${noEvidenceRows.length} records</span>
+        <span>Page <strong style="color:#334155">\${currentPage}</strong> of <strong style="color:#334155">\${tp}</strong> &nbsp;·&nbsp; \${noEvidenceRows.length} records</span>
         <button \${btnStyle(currentPage === tp)} \${currentPage === tp ? 'disabled' : ''} onclick="goToPage(\${currentPage + 1})">Next &#8594;</button>
       \`;
     }
