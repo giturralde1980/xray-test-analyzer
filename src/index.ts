@@ -84,61 +84,63 @@ function generateHtmlReport(data: ReportData): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
   <title>XRAY Test Analytics - ${data.releaseVersion}</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
   <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f1f5f9;color:#1e293b;padding:2rem;min-height:100vh}
+    *{margin:0;padding:0;box-sizing:border-box;color-scheme:light}
+    html{color-scheme:light}
+    body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f1f5f9 !important;color:#1e293b !important;padding:2rem;min-height:100vh}
     .container{max-width:1600px;margin:0 auto}
-    .header{margin-bottom:3rem;background:linear-gradient(135deg,rgba(6,182,212,.08) 0%,rgba(59,130,246,.08) 100%);padding:2rem;border-radius:20px;border:1px solid rgba(6,182,212,.25);backdrop-filter:blur(10px)}
+    .header{margin-bottom:3rem;background:linear-gradient(135deg,rgba(6,182,212,.08) 0%,rgba(59,130,246,.08) 100%);padding:2rem;border-radius:20px;border:1px solid rgba(6,182,212,.25)}
     .header-content{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem}
     h1{font-size:2.5rem;background:linear-gradient(135deg,#06b6d4 0%,#3b82f6 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:900}
-    .header-subtitle{color:#64748b;margin-top:.5rem;font-size:1.1rem}
+    .header-subtitle{color:#475569 !important;margin-top:.5rem;font-size:1.1rem}
     .total-count{text-align:right}
-    .total-count-number{font-size:3rem;font-weight:900;color:#06b6d4}
-    .total-count-label{color:#64748b;font-size:.9rem;margin-top:.5rem}
+    .total-count-number{font-size:3rem;font-weight:900;color:#06b6d4 !important}
+    .total-count-label{color:#475569 !important;font-size:.9rem;margin-top:.5rem}
     .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.5rem;margin-bottom:3rem}
-    .kpi-card{padding:1.5rem;border-radius:15px;border:1px solid rgba(0,0,0,.08);background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:all .3s ease;position:relative;overflow:hidden}
+    .kpi-card{padding:1.5rem;border-radius:15px;border:1px solid rgba(0,0,0,.1);background:#ffffff !important;box-shadow:0 1px 4px rgba(0,0,0,.08);transition:all .3s ease;position:relative;overflow:hidden}
     .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#06b6d4,#3b82f6)}
     .kpi-card:hover{transform:translateY(-5px);border-color:rgba(6,182,212,.4);box-shadow:0 4px 12px rgba(6,182,212,.12)}
-    .kpi-card.pass{background:#f0fdf4;border-color:rgba(16,185,129,.25)}
+    .kpi-card.pass{background:#f0fdf4 !important;border-color:rgba(16,185,129,.3)}
     .kpi-card.pass::before{background:#10b981}
-    .kpi-card.evidence{background:#f0f9ff;border-color:rgba(3,105,161,.25)}
+    .kpi-card.evidence{background:#eff6ff !important;border-color:rgba(3,105,161,.3)}
     .kpi-card.evidence::before{background:#0369a1}
-    .kpi-card.executing{background:#faf5ff;border-color:rgba(139,92,246,.25)}
+    .kpi-card.executing{background:#faf5ff !important;border-color:rgba(139,92,246,.3)}
     .kpi-card.executing::before{background:#8b5cf6}
-    .kpi-card.pending{background:#fffbeb;border-color:rgba(245,158,11,.25)}
+    .kpi-card.pending{background:#fffbeb !important;border-color:rgba(245,158,11,.3)}
     .kpi-card.pending::before{background:#f59e0b}
-    .kpi-card.duration{background:#fff5f5;border-color:rgba(239,68,68,.25)}
+    .kpi-card.duration{background:#fff5f5 !important;border-color:rgba(239,68,68,.3)}
     .kpi-card.duration::before{background:#ef4444}
-    .kpi-card.failed{background:#fff5f5;border-color:rgba(239,68,68,.25)}
+    .kpi-card.failed{background:#fff5f5 !important;border-color:rgba(239,68,68,.3)}
     .kpi-card.failed::before{background:#ef4444}
-    .kpi-label{color:#64748b;font-size:.85rem;font-weight:600;margin-bottom:.8rem;text-transform:uppercase;letter-spacing:1px}
-    .kpi-value{font-size:2.5rem;font-weight:900;margin-bottom:.5rem}
-    .kpi-subtext{color:#94a3b8;font-size:.85rem}
+    .kpi-label{color:#475569 !important;font-size:.85rem;font-weight:600;margin-bottom:.8rem;text-transform:uppercase;letter-spacing:1px}
+    .kpi-value{font-size:2.5rem;font-weight:900;margin-bottom:.5rem;color:#0f172a !important}
+    .kpi-subtext{color:#64748b !important;font-size:.85rem}
     .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(500px,1fr));gap:2rem;margin-bottom:3rem}
-    .chart-container{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:2rem;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:all .3s ease}
+    .chart-container{background:#ffffff !important;border:1px solid rgba(0,0,0,.1);border-radius:20px;padding:2rem;box-shadow:0 1px 4px rgba(0,0,0,.08);transition:all .3s ease}
     .chart-container:hover{border-color:rgba(6,182,212,.4);box-shadow:0 4px 16px rgba(6,182,212,.1)}
-    .chart-title{font-size:1.5rem;font-weight:700;margin-bottom:1.5rem;color:#0284c7}
+    .chart-title{font-size:1.5rem;font-weight:700;margin-bottom:1.5rem;color:#0284c7 !important}
     .chart-wrapper{position:relative;height:400px}
-    .metric-box{background:#f8fafc;padding:1rem;border-radius:10px;margin:.5rem 0;border-left:3px solid #06b6d4}
+    .metric-box{background:#f1f5f9 !important;padding:1rem;border-radius:10px;margin:.5rem 0;border-left:3px solid #06b6d4}
     .metric-box.high{border-left-color:#10b981}
     .metric-box.warning{border-left-color:#f59e0b}
-    .metric-name{color:#64748b;font-size:.9rem;margin-bottom:.3rem}
-    .metric-value{font-size:1.8rem;font-weight:900;color:#0284c7}
-    .metric-box.high .metric-value{color:#10b981}
-    .metric-box.warning .metric-value{color:#f59e0b}
-    .table-container{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:2rem;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow-x:auto;margin-bottom:3rem}
-    .table-title{font-size:1.5rem;font-weight:700;margin-bottom:.5rem;color:#0284c7}
-    .table-subtitle{color:#64748b;font-size:.9rem;margin-bottom:1.5rem}
+    .metric-name{color:#475569 !important;font-size:.9rem;margin-bottom:.3rem}
+    .metric-value{font-size:1.8rem;font-weight:900;color:#0284c7 !important}
+    .metric-box.high .metric-value{color:#10b981 !important}
+    .metric-box.warning .metric-value{color:#f59e0b !important}
+    .table-container{background:#ffffff !important;border:1px solid rgba(0,0,0,.1);border-radius:20px;padding:2rem;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow-x:auto;margin-bottom:3rem}
+    .table-title{font-size:1.5rem;font-weight:700;margin-bottom:.5rem;color:#0284c7 !important}
+    .table-subtitle{color:#475569 !important;font-size:.9rem;margin-bottom:1.5rem}
     table{width:100%;border-collapse:collapse}
-    th{background:#f8fafc;padding:1rem;text-align:left;color:#64748b;font-weight:600;font-size:.9rem;text-transform:uppercase;border-bottom:2px solid rgba(6,182,212,.3)}
-    td{padding:1rem;border-bottom:1px solid rgba(0,0,0,.06);color:#334155;font-size:.9rem}
-    tr:hover td{background:rgba(6,182,212,.05)}
-    tr.zero-dur td{background:rgba(239,68,68,.08);border-top:1px solid rgba(239,68,68,.3);border-bottom:1px solid rgba(239,68,68,.3)}
+    th{background:#f8fafc !important;padding:1rem;text-align:left;color:#475569 !important;font-weight:600;font-size:.9rem;text-transform:uppercase;border-bottom:2px solid rgba(6,182,212,.3)}
+    td{padding:1rem;border-bottom:1px solid rgba(0,0,0,.07);color:#1e293b !important;font-size:.9rem}
+    tr:hover td{background:rgba(6,182,212,.05) !important}
+    tr.zero-dur td{background:rgba(239,68,68,.08) !important;border-top:1px solid rgba(239,68,68,.3);border-bottom:1px solid rgba(239,68,68,.3)}
     .badge{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.8rem;font-weight:600}
-    .footer{display:flex;justify-content:space-between;align-items:center;padding-top:2rem;border-top:1px solid rgba(0,0,0,.08);color:#64748b;font-size:.9rem;margin-top:3rem}
-    .footer-left p,.footer-right p{margin-bottom:.5rem}
+    .footer{display:flex;justify-content:space-between;align-items:center;padding-top:2rem;border-top:1px solid rgba(0,0,0,.1);color:#475569 !important;font-size:.9rem;margin-top:3rem}
+    .footer-left p,.footer-right p{margin-bottom:.5rem;color:#475569 !important}
     .footer-right{text-align:right}
     @media(max-width:1200px){.charts-grid{grid-template-columns:1fr}}
   </style>
@@ -239,7 +241,7 @@ function generateHtmlReport(data: ReportData): string {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
         <div>
           <div class="chart-title" style="margin-bottom:.25rem">Passed Without Evidence</div>
-          <div class="table-subtitle">Most critical: passed test runs with no attached proof &mdash; <strong style="color:#cbd5e1">${data.breakdown.passedWithoutEvidence}</strong> total</div>
+          <div class="table-subtitle">Most critical: passed test runs with no attached proof &mdash; <strong style="color:#0f172a">${data.breakdown.passedWithoutEvidence}</strong> total</div>
         </div>
         <div id="paginatorTop" style="display:flex;align-items:center;gap:.75rem;font-size:.9rem;color:#94a3b8"></div>
       </div>
