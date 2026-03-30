@@ -21,6 +21,13 @@ on:
           - 'false'
           - 'true'
 
+  # External API trigger — called from Copado, Jira, or any platform via curl:
+  #   POST https://api.github.com/repos/{owner}/{repo}/dispatches
+  #   Body: { "event_type": "xray-report", "client_payload": { "release_version": "r15", "email_to": "...", "use_sample_data": "false" } }
+  #   Header: Authorization: Bearer <GITHUB_PAT>  (needs repo scope or actions:write)
+  repository_dispatch:
+    types: [xray-report]
+
   # Scheduled run — every Monday at 8am UTC
   # Uncomment and adjust when ready for automation
   # schedule:
@@ -50,8 +57,8 @@ jobs:
       - name: Generate report
         id: generate
         env:
-          RELEASE_VERSION:     ${{ github.event.inputs.release_version || 'r14' }}
-          USE_SAMPLE_DATA:     ${{ github.event.inputs.use_sample_data || 'false' }}
+          RELEASE_VERSION:     ${{ github.event.inputs.release_version || github.event.client_payload.release_version || 'r14' }}
+          USE_SAMPLE_DATA:     ${{ github.event.inputs.use_sample_data || github.event.client_payload.use_sample_data || 'false' }}
           XRAY_API_BASE_URL:   ${{ secrets.XRAY_API_BASE_URL }}
           XRAY_CLIENT_ID:      ${{ secrets.XRAY_CLIENT_ID }}
           XRAY_CLIENT_SECRET:  ${{ secrets.XRAY_CLIENT_SECRET }}
@@ -65,7 +72,7 @@ jobs:
       - name: Resolve email recipients
         id: recipients
         run: |
-          OVERRIDE="${{ github.event.inputs.email_to }}"
+          OVERRIDE="${{ github.event.inputs.email_to || github.event.client_payload.email_to }}"
           DEFAULT="${{ secrets.MAIL_TO }}"
           FALLBACK="german.iturralde@gmail.com"
           echo "to=${OVERRIDE:-${DEFAULT:-$FALLBACK}}" >> $GITHUB_OUTPUT
@@ -90,3 +97,46 @@ jobs:
 
             Open the attached HTML file in any browser to view the full interactive dashboard.
           attachments: ${{ steps.generate.outputs.report_file }}
+
+      # ---------------------------------------------------------------------------
+      # SALESFORCE CALLBACK — posts a summary record to a custom SF object.
+      # Requires a Connected App with OAuth 2.0 (client_credentials or jwt-bearer).
+      #
+      # GitHub Secrets needed:
+      #   SF_CLIENT_ID       — Connected App consumer key
+      #   SF_CLIENT_SECRET   — Connected App consumer secret
+      #   SF_INSTANCE_URL    — e.g. https://yourorg.my.salesforce.com
+      #
+      # Salesforce setup:
+      #   1. Create Connected App → enable OAuth, add "client_credentials" flow
+      #   2. Create Custom Object: Xray_Report_Result__c
+      #      Fields: Release__c (Text), Status__c (Text), Run_Number__c (Text),
+      #              Triggered_By__c (Text), Summary__c (Long Text Area)
+      # ---------------------------------------------------------------------------
+      # - name: Salesforce callback — report summary
+      #   if: always()   # runs even if a prior step failed, so SF always gets a result
+      #   env:
+      #     SF_CLIENT_ID:      ${{ secrets.SF_CLIENT_ID }}
+      #     SF_CLIENT_SECRET:  ${{ secrets.SF_CLIENT_SECRET }}
+      #     SF_INSTANCE_URL:   ${{ secrets.SF_INSTANCE_URL }}
+      #     RELEASE_VERSION:   ${{ github.event.inputs.release_version || github.event.client_payload.release_version || 'r14' }}
+      #   run: |
+      #     # 1. Authenticate — obtain access token via client_credentials
+      #     TOKEN_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/oauth2/token" \
+      #       -d "grant_type=client_credentials" \
+      #       -d "client_id=${SF_CLIENT_ID}" \
+      #       -d "client_secret=${SF_CLIENT_SECRET}")
+      #
+      #     ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+      #
+      #     # 2. POST summary record to custom object
+      #     curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/Xray_Report_Result__c/" \
+      #       -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+      #       -H "Content-Type: application/json" \
+      #       -d "{
+      #         \"Release__c\":      \"${RELEASE_VERSION}\",
+      #         \"Status__c\":       \"${{ job.status }}\",
+      #         \"Run_Number__c\":   \"${{ github.run_number }}\",
+      #         \"Triggered_By__c\": \"${{ github.actor }}\",
+      #         \"Summary__c\":      \"XRAY Evidence Report generated. Release: ${RELEASE_VERSION}. Run: #${{ github.run_number }}. Status: ${{ job.status }}.\"
+      #       }"
