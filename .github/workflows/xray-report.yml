@@ -145,7 +145,8 @@ jobs:
               \"Recommendation__c\":  \"${RECOMMENDATION}\"
             }")
 
-          RECORD_ID=$(echo "${CREATE_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          echo "SF Create response: ${CREATE_RESPONSE}"
+          RECORD_ID=$(echo "${CREATE_RESPONSE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id']) if isinstance(d,dict) and 'id' in d else (print('ERROR creating record:',d,file=sys.stderr) or exit(1))")
           echo "SF Evidence__c record created: ${RECORD_ID}"
 
           # 3. Encode HTML report as base64 and upload as Salesforce File (ContentVersion)
