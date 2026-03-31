@@ -113,13 +113,14 @@ jobs:
       #      Fields: Release__c (Text), Status__c (Text), Run_Number__c (Text),
       #              Triggered_By__c (Text), Summary__c (Long Text Area)
       # ---------------------------------------------------------------------------
-      - name: Salesforce callback — report summary
+      - name: Salesforce callback — report summary + upload HTML
         if: always()   # runs even if a prior step failed, so SF always gets a result
         env:
           SF_CLIENT_ID:      ${{ secrets.SF_CLIENT_ID }}
           SF_CLIENT_SECRET:  ${{ secrets.SF_CLIENT_SECRET }}
           SF_INSTANCE_URL:   ${{ secrets.SF_INSTANCE_URL }}
           RELEASE_VERSION:   ${{ github.event.inputs.release_version || github.event.client_payload.release_version || 'r14' }}
+          REPORT_FILE:       ${{ steps.generate.outputs.report_file }}
         run: |
           # 1. Authenticate — obtain access token via client_credentials
           TOKEN_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/oauth2/token" \
@@ -129,8 +130,8 @@ jobs:
 
           ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-          # 2. POST summary record to custom object
-          curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/Evidence__c/" \
+          # 2. Create Evidence__c record — capture the new record ID
+          CREATE_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/Evidence__c/" \
             -H "Authorization: Bearer ${ACCESS_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "{
@@ -139,4 +140,42 @@ jobs:
               \"Run_Number__c\":   \"${{ github.run_number }}\",
               \"Triggered_By__c\": \"${{ github.actor }}\",
               \"Summary__c\":      \"XRAY Evidence Report generated. Release: ${RELEASE_VERSION}. Run: #${{ github.run_number }}. Status: ${{ job.status }}.\"
+            }")
+
+          RECORD_ID=$(echo "${CREATE_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          echo "SF Evidence__c record created: ${RECORD_ID}"
+
+          # 3. Encode HTML report as base64 and upload as Salesforce File (ContentVersion)
+          FILE_B64=$(base64 -w 0 "${REPORT_FILE}")
+          FILE_NAME=$(basename "${REPORT_FILE}")
+
+          CV_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/ContentVersion/" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"Title\":         \"XRAY Report - ${RELEASE_VERSION} - Run #${{ github.run_number }}\",
+              \"PathOnClient\":  \"${FILE_NAME}\",
+              \"VersionData\":   \"${FILE_B64}\"
+            }")
+
+          CV_ID=$(echo "${CV_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          echo "ContentVersion created: ${CV_ID}"
+
+          # 4. Get ContentDocumentId from the ContentVersion just created
+          CDI_RESPONSE=$(curl -s -X GET "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/ContentVersion/${CV_ID}?fields=ContentDocumentId" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}")
+
+          CONTENT_DOC_ID=$(echo "${CDI_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['ContentDocumentId'])")
+          echo "ContentDocumentId: ${CONTENT_DOC_ID}"
+
+          # 5. Link the file to the Evidence__c record via ContentDocumentLink
+          curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/ContentDocumentLink/" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"ContentDocumentId\": \"${CONTENT_DOC_ID}\",
+              \"LinkedEntityId\":    \"${RECORD_ID}\",
+              \"ShareType\":         \"V\"
             }"
+
+          echo "Report HTML linked to Evidence__c/${RECORD_ID} in Salesforce."
