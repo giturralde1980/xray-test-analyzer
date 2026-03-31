@@ -130,7 +130,7 @@ jobs:
           ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
           # 2. POST summary record to custom object
-          curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/Xray_Report_Result__c/" \
+          curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/Evidences__c/" \
             -H "Authorization: Bearer ${ACCESS_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "{
