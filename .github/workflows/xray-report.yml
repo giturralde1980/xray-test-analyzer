@@ -69,34 +69,34 @@ jobs:
           npm start
           echo "report_file=$(ls -t output/report-*.html | head -1)" >> $GITHUB_OUTPUT
 
-      - name: Resolve email recipients
-        id: recipients
-        run: |
-          OVERRIDE="${{ github.event.inputs.email_to || github.event.client_payload.email_to }}"
-          DEFAULT="${{ secrets.MAIL_TO }}"
-          FALLBACK="german.iturralde@gmail.com"
-          echo "to=${OVERRIDE:-${DEFAULT:-$FALLBACK}}" >> $GITHUB_OUTPUT
+      # - name: Resolve email recipients
+      #   id: recipients
+      #   run: |
+      #     OVERRIDE="${{ github.event.inputs.email_to || github.event.client_payload.email_to }}"
+      #     DEFAULT="${{ secrets.MAIL_TO }}"
+      #     FALLBACK="german.iturralde@gmail.com"
+      #     echo "to=${OVERRIDE:-${DEFAULT:-$FALLBACK}}" >> $GITHUB_OUTPUT
 
-      - name: Send report by email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.GMAIL_USER }}
-          password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          to: ${{ steps.recipients.outputs.to }}
-          from: ${{ secrets.GMAIL_USER }}
-          subject: "[XRAY] Evidence Report - ${{ github.event.inputs.release_version || 'r14' }} - Run #${{ github.run_number }}"
-          body: |
-            XRAY Evidence Report generated successfully.
-
-            Release: ${{ github.event.inputs.release_version || 'r14' }}
-            Workflow run: #${{ github.run_number }}
-            Triggered by: ${{ github.actor }}
-
-            Open the attached HTML file in any browser to view the full interactive dashboard.
-          attachments: ${{ steps.generate.outputs.report_file }}
+      # - name: Send report by email
+      #   uses: dawidd6/action-send-mail@v3
+      #   with:
+      #     server_address: smtp.gmail.com
+      #     server_port: 465
+      #     secure: true
+      #     username: ${{ secrets.GMAIL_USER }}
+      #     password: ${{ secrets.GMAIL_APP_PASSWORD }}
+      #     to: ${{ steps.recipients.outputs.to }}
+      #     from: ${{ secrets.GMAIL_USER }}
+      #     subject: "[XRAY] Evidence Report - ${{ github.event.inputs.release_version || 'r14' }} - Run #${{ github.run_number }}"
+      #     body: |
+      #       XRAY Evidence Report generated successfully.
+      #
+      #       Release: ${{ github.event.inputs.release_version || 'r14' }}
+      #       Workflow run: #${{ github.run_number }}
+      #       Triggered by: ${{ github.actor }}
+      #
+      #       Open the attached HTML file in any browser to view the full interactive dashboard.
+      #     attachments: ${{ steps.generate.outputs.report_file }}
 
       # ---------------------------------------------------------------------------
       # SALESFORCE CALLBACK — posts a summary record to a custom SF object.
