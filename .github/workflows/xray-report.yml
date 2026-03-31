@@ -129,7 +129,8 @@ jobs:
             -d "client_id=${SF_CLIENT_ID}" \
             -d "client_secret=${SF_CLIENT_SECRET}")
 
-          ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          echo "SF Auth response: ${TOKEN_RESPONSE}"
+          ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['access_token']) if 'access_token' in d else (print('ERROR:',d,file=sys.stderr) or exit(1))")
 
           # 2. Create Evidence__c record — capture the new record ID
           CREATE_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/Evidence__c/" \
