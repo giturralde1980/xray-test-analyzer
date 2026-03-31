@@ -121,6 +121,7 @@ jobs:
           SF_INSTANCE_URL:   ${{ secrets.SF_INSTANCE_URL }}
           RELEASE_VERSION:   ${{ github.event.inputs.release_version || github.event.client_payload.release_version || 'r14' }}
           REPORT_FILE:       ${{ steps.generate.outputs.report_file }}
+          RECOMMENDATION:    ${{ steps.generate.outputs.recommendation }}
         run: |
           # 1. Authenticate — obtain access token via client_credentials
           TOKEN_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/oauth2/token" \
@@ -139,7 +140,8 @@ jobs:
               \"Status__c\":       \"${{ job.status }}\",
               \"Run_Number__c\":   \"${{ github.run_number }}\",
               \"Triggered_By__c\": \"${{ github.actor }}\",
-              \"Summary__c\":      \"XRAY Evidence Report generated. Release: ${RELEASE_VERSION}. Run: #${{ github.run_number }}. Status: ${{ job.status }}.\"
+              \"Summary__c\":          \"XRAY Evidence Report generated. Release: ${RELEASE_VERSION}. Run: #${{ github.run_number }}. Status: ${{ job.status }}.\",
+              \"Recommendation__c\":  \"${RECOMMENDATION}\"
             }")
 
           RECORD_ID=$(echo "${CREATE_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")

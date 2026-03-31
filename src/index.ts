@@ -517,6 +517,12 @@ async function main(): Promise<void> {
   console.log('Status counts:', statusCounts);
   console.log('Breakdown:', breakdown);
 
+  const recommendation = breakdown.passedWithoutEvidence > breakdown.passedWithEvidence ? 'NO' : 'SI';
+  console.log(`Recommendation: ${recommendation}`);
+  if (process.env.GITHUB_OUTPUT) {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `recommendation=${recommendation}\n`);
+  }
+
   const passedNoEvidenceRows = noEvidenceRows.filter((row) => (row.status || '').toUpperCase() === 'PASSED');
   console.log(`Passed without evidence: ${passedNoEvidenceRows.length}`);
 
