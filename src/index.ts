@@ -5,6 +5,7 @@ import config from './config';
 import { fetchTestExecutions } from './xrayClient';
 import { getXrayToken } from './xrayAuth';
 import { findNoEvidenceTestRunsInExecutions } from './filters';
+import { fetchJiraIssuesForExecutions } from './jiraClient';
 
 interface ReportData {
   totalExecutions: number;
@@ -64,18 +65,24 @@ function generateHtmlReport(data: ReportData): string {
   const statusData = Object.values(data.statusCounts);
   const statusBgColors = statusLabels.map(l => statusColors[l.toUpperCase()] || '#64748b');
 
-  const noEvidenceRowsJson = JSON.stringify(filteredRows.map((row) => {
+  const noEvidenceRowsJson = JSON.stringify(filteredRows
+    .sort((a, b) => {
+      const keyA = ((a as any).jiraKey || '').localeCompare((b as any).jiraKey || '');
+      if (keyA !== 0) return keyA;
+      return ((a as any).jiraSummary || '').localeCompare((b as any).jiraSummary || '');
+    })
+    .map((row) => {
     const dur = formatDuration(row.startedOn, row.finishedOn);
     return {
-      execution: row.execution,
-      testRunId: row.testRunId,
       status: row.status || 'Unknown',
       startedOn: row.startedOn || '—',
       finishedOn: row.finishedOn || '—',
       comment: row.comment || '—',
       duration: dur,
-      executedById: row.executedById || '—',
-      zeroDur: dur === '0 min'
+      zeroDur: dur === '0 min',
+      jiraKey: (row as any).jiraKey || '—',
+      jiraSummary: (row as any).jiraSummary || '—',
+      jiraPriority: (row as any).jiraPriority || '—'
     };
   }));
 
@@ -248,9 +255,9 @@ function generateHtmlReport(data: ReportData): string {
       <table>
         <thead>
           <tr>
-            <th>Execution</th><th>TestRun ID</th><th>Status</th>
+            <th>Jira Key</th><th>Summary</th><th>Status</th>
             <th>Started</th><th>Finished</th><th>Duration</th>
-            <th>Comment</th><th style="display:none">Executed By</th>
+            <th>Priority</th><th>Comment</th>
           </tr>
         </thead>
         <tbody id="noEvidenceTableBody"></tbody>
@@ -367,6 +374,7 @@ function generateHtmlReport(data: ReportData): string {
     });
 
     // --- Pagination for no-evidence table ---
+    const JIRA_BASE_URL = '${config.jiraBaseUrl}';
     const noEvidenceRows = ${noEvidenceRowsJson};
     const PAGE_SIZE = 20;
     let currentPage = 1;
@@ -378,14 +386,14 @@ function generateHtmlReport(data: ReportData): string {
       const tbody = document.getElementById('noEvidenceTableBody');
       tbody.innerHTML = pageRows.map(r => \`
         <tr\${r.zeroDur ? ' class="zero-dur"' : ''}>
-          <td>\${r.execution}</td>
-          <td>\${r.testRunId}</td>
+          <td><a href="\${JIRA_BASE_URL}/browse/\${r.jiraKey}" target="_blank" style="color:#0284c7;text-decoration:none;font-weight:500">\${r.jiraKey}</a></td>
+          <td>\${r.jiraSummary}</td>
           <td><span class="badge" style="background:#10b98122;color:#10b981">\${r.status}</span></td>
           <td>\${r.startedOn}</td>
           <td>\${r.finishedOn}</td>
           <td>\${r.duration}</td>
+          <td>\${r.jiraPriority}</td>
           <td>\${r.comment}</td>
-          <td style="display:none">\${r.executedById}</td>
         </tr>\`).join('');
       renderPaginator('paginatorTop');
       renderPaginator('paginatorBottom');
@@ -496,6 +504,22 @@ async function main(): Promise<void> {
   });
 
   const noEvidenceRows = findNoEvidenceTestRunsInExecutions(executions.results);
+
+  const passedNoEvidenceExecutionKeys = noEvidenceRows
+    .filter((r) => (r.status || '').toUpperCase() === 'PASSED')
+    .map((r) => r.execution);
+  const jiraInfoMap = await fetchJiraIssuesForExecutions(passedNoEvidenceExecutionKeys);
+  const noEvidenceRowsEnriched = noEvidenceRows.map((row) => {
+    const issueId = row.execution.slice(row.execution.indexOf(':') + 1);
+    const jiraInfo = jiraInfoMap.get(issueId);
+    return {
+      ...row,
+      jiraKey: jiraInfo?.key || '—',
+      jiraSummary: jiraInfo?.summary || '—',
+      jiraPriority: jiraInfo?.priority || '—'
+    };
+  });
+
   const executorPerformance = Object.entries(executorMap)
     .map(([name, stats]) => ({
       name,
@@ -523,7 +547,7 @@ async function main(): Promise<void> {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `recommendation=${recommendation}\n`);
   }
 
-  const passedNoEvidenceRows = noEvidenceRows.filter((row) => (row.status || '').toUpperCase() === 'PASSED');
+  const passedNoEvidenceRows = noEvidenceRowsEnriched.filter((row) => (row.status || '').toUpperCase() === 'PASSED');
   console.log(`Passed without evidence: ${passedNoEvidenceRows.length}`);
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
@@ -538,10 +562,10 @@ async function main(): Promise<void> {
     totalExecutions: executions.total,
     emptyExecutions,
     totalTestRuns,
-    noEvidenceCount: noEvidenceRows.length,
+    noEvidenceCount: noEvidenceRowsEnriched.length,
     statusCounts,
     breakdown,
-    noEvidenceRows,
+    noEvidenceRows: noEvidenceRowsEnriched,
     timestamp: new Date().toLocaleString('en-US', { hour12: false }),
     releaseVersion: config.releaseVersion,
     avgDuration,

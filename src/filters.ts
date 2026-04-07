@@ -81,13 +81,14 @@ export function findNoEvidenceTestRunsInExecutions(
       const status = (tr.status?.name ?? '').toUpperCase();
       if (!COMPLETED_STATUSES.has(status)) return; // skip TO DO, EXECUTING, etc.
 
-      const evidence = tr.evidence;
-      const hasAnyEvidence = Array.isArray(evidence) && evidence.length > 0;
+      const hasAnyEvidence =
+        (Array.isArray(tr.evidence) && tr.evidence.length > 0) ||
+        (Array.isArray(tr.steps) && tr.steps.some((s: any) => Array.isArray(s.evidence) && s.evidence.length > 0));
       if (!hasAnyEvidence) {
         rows.push({
           execution: executionKey,
           testRunId: String(tr.id ?? 'unknown'),
-          status: tr.status?.name,
+status: tr.status?.name,
           startedOn: tr.startedOn,
           finishedOn: tr.finishedOn,
           executedById: tr.executedById,

@@ -11,6 +11,8 @@ interface Config {
   xrayClientSecret: string;
   xrayJql: string;
   releaseVersion: string;
+  jiraBaseUrl: string;
+  jiraAuthToken: string;
 }
 
 const config: Config = {
@@ -20,6 +22,8 @@ const config: Config = {
   xrayClientId: process.env.XRAY_CLIENT_ID || '',
   xrayClientSecret: process.env.XRAY_CLIENT_SECRET || '',
   xrayJql: process.env.XRAY_JQL || 'labels = "XRAY_VERSION_PLACEHOLDER" AND labels = "uat" AND project = "CHCCRM01" AND type = "test execution" ORDER BY created DESC',
-  releaseVersion: process.env.RELEASE_VERSION || 'r12'};
+  releaseVersion: process.env.RELEASE_VERSION || 'r12',
+  jiraBaseUrl: process.env.JIRA_BASE_URL || 'https://opella-health.atlassian.net',
+  jiraAuthToken: process.env.JIRA_AUTH_TOKEN || ''};
 
 export default config;
