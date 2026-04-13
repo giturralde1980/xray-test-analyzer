@@ -230,6 +230,17 @@ OUTPUT_FILE=output/report.html
 # Set to true to skip real API calls and use mock data instead.
 # Useful for testing the report UI without valid credentials.
 USE_SAMPLE_DATA=false
+
+# ─── Jira REST API ───────────────────────────────────────────────────────────
+# Base URL of your Jira Cloud instance (no trailing slash).
+# Used to build clickable issue links in the report and to call the Jira REST API.
+JIRA_BASE_URL=https://your-org.atlassian.net
+
+# Basic Auth token for Jira REST API v3.
+# Value must be the Base64 encoding of "email@example.com:api_token".
+# Generate an API token at: Jira → Profile → Security → API tokens
+# Then encode: echo -n "email@example.com:your_token" | base64
+JIRA_AUTH_TOKEN=your_base64_encoded_email_and_token_here
 ```
 
 ---
@@ -354,6 +365,8 @@ Go to **Actions** tab in GitHub → select _Xray Evidence Report_ → **Run work
 | `XRAY_CLIENT_ID` | Xray Cloud Client ID |
 | `XRAY_CLIENT_SECRET` | Xray Cloud Client Secret |
 | `XRAY_JQL` | JQL query string (with `XRAY_VERSION_PLACEHOLDER`) |
+| `JIRA_BASE_URL` | Jira Cloud instance base URL (e.g. `https://your-org.atlassian.net`) |
+| `JIRA_AUTH_TOKEN` | Base64 of `email:api_token` for Jira REST API authentication |
 | `GMAIL_USER` | Gmail account used to send the report |
 | `GMAIL_APP_PASSWORD` | Gmail app-specific password (not the main account password) |
 | `MAIL_TO` | Default email recipient(s) for the report |
@@ -378,6 +391,8 @@ Go to **Actions** tab in GitHub → select _Xray Evidence Report_ → **Run work
 | `XRAY_CLIENT_ID` | Yes | — | 32-char hex Client ID from Xray Cloud API Keys settings |
 | `XRAY_CLIENT_SECRET` | Yes | — | 64-char hex Client Secret paired with the Client ID |
 | `XRAY_JQL` | Yes | — | JQL query using `XRAY_VERSION_PLACEHOLDER` as the version marker |
+| `JIRA_BASE_URL` | Yes | `https://opella-health.atlassian.net` | Jira instance base URL, used to build clickable issue links and for the REST API |
+| `JIRA_AUTH_TOKEN` | Yes | — | Base64 of `email@example.com:api_token`. Generate at Jira → Profile → Security → API tokens |
 | `OUTPUT_FILE` | No | `output/report.html` | Base output path (actual filename includes version and timestamp) |
 | `USE_SAMPLE_DATA` | No | `false` | Set to `true` to skip API calls and use mock data |
 
