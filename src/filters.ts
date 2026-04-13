@@ -67,36 +67,53 @@ export function findNoEvidenceTestRuns(traces: Trace[]): Array<{ traceId: string
 
 const COMPLETED_STATUSES = new Set(['PASSED', 'PASS', 'FAILED', 'FAIL']);
 
+function buildRow(executionKey: string, tr: any): TestRunNoEvidenceRow {
+  return {
+    execution: executionKey,
+    testRunId: String(tr.id ?? 'unknown'),
+    status: tr.status?.name,
+    startedOn: tr.startedOn,
+    finishedOn: tr.finishedOn,
+    executedById: tr.executedById,
+    comment: tr.comment
+  };
+}
+
+function checkEvidence(tr: any): boolean {
+  return (
+    (Array.isArray(tr.evidence) && tr.evidence.length > 0) ||
+    (Array.isArray(tr.steps) && tr.steps.some((s: any) => Array.isArray(s.evidence) && s.evidence.length > 0))
+  );
+}
+
 export function findNoEvidenceTestRunsInExecutions(
   executions: Array<any>
 ): TestRunNoEvidenceRow[] {
   if (!Array.isArray(executions)) return [];
-
   const rows: TestRunNoEvidenceRow[] = [];
-
   executions.forEach((exec) => {
     const executionKey = `${exec.projectId ?? 'unknown'}:${exec.issueId ?? 'unknown'}`;
-
     (exec.testRuns?.results ?? []).forEach((tr: any) => {
       const status = (tr.status?.name ?? '').toUpperCase();
-      if (!COMPLETED_STATUSES.has(status)) return; // skip TO DO, EXECUTING, etc.
-
-      const hasAnyEvidence =
-        (Array.isArray(tr.evidence) && tr.evidence.length > 0) ||
-        (Array.isArray(tr.steps) && tr.steps.some((s: any) => Array.isArray(s.evidence) && s.evidence.length > 0));
-      if (!hasAnyEvidence) {
-        rows.push({
-          execution: executionKey,
-          testRunId: String(tr.id ?? 'unknown'),
-status: tr.status?.name,
-          startedOn: tr.startedOn,
-          finishedOn: tr.finishedOn,
-          executedById: tr.executedById,
-          comment: tr.comment
-        });
-      }
+      if (!COMPLETED_STATUSES.has(status)) return;
+      if (!checkEvidence(tr)) rows.push(buildRow(executionKey, tr));
     });
   });
+  return rows;
+}
 
+export function findWithEvidenceTestRunsInExecutions(
+  executions: Array<any>
+): TestRunNoEvidenceRow[] {
+  if (!Array.isArray(executions)) return [];
+  const rows: TestRunNoEvidenceRow[] = [];
+  executions.forEach((exec) => {
+    const executionKey = `${exec.projectId ?? 'unknown'}:${exec.issueId ?? 'unknown'}`;
+    (exec.testRuns?.results ?? []).forEach((tr: any) => {
+      const status = (tr.status?.name ?? '').toUpperCase();
+      if (status !== 'PASSED' && status !== 'PASS') return;
+      if (checkEvidence(tr)) rows.push(buildRow(executionKey, tr));
+    });
+  });
   return rows;
 }
