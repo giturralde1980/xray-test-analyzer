@@ -60,8 +60,8 @@ async function fetchTestExecutionsPage(
             finishedOn
             executedById
             comment
-            evidence { id filename createdOn }
-            steps { evidence { id } }
+            evidence { id filename size createdOn }
+            steps { evidence { id filename size createdOn } }
           }
         }
       }

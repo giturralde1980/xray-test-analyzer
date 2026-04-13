@@ -86,7 +86,14 @@ function generateHtmlReport(data: ReportData): string {
           zeroDur: dur === '0 min',
           jiraKey: row.jiraKey || '—',
           jiraSummary: row.jiraSummary || '—',
-          jiraPriority: row.jiraPriority || '—'
+          jiraPriority: row.jiraPriority || '—',
+          evidenceFiles: (row.evidenceFiles || []).map((e: any) => ({
+            id: e.id,
+            filename: e.filename || 'unknown',
+            size: e.size || 0,
+            createdOn: e.createdOn || null,
+            fromStep: e.fromStep || false
+          }))
         };
       })
   );
@@ -158,6 +165,19 @@ function generateHtmlReport(data: ReportData): string {
     tr.zero-dur td{background:rgba(239,68,68,.08) !important;border-top:1px solid rgba(239,68,68,.3);border-bottom:1px solid rgba(239,68,68,.3)}
     .badge{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.8rem;font-weight:600}
     .footer{display:flex;justify-content:space-between;align-items:center;padding-top:2rem;border-top:1px solid rgba(0,0,0,.1);color:#475569 !important;font-size:.9rem;margin-top:3rem}
+    .ev-btn{padding:.3rem .8rem;border-radius:8px;border:1px solid rgba(6,182,212,.5);background:rgba(6,182,212,.08);color:#0284c7;cursor:pointer;font-size:.8rem;font-weight:600;white-space:nowrap}
+    .ev-btn:hover{background:rgba(6,182,212,.18)}
+    #evModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center}
+    #evModal.open{display:flex}
+    #evModalBox{background:#fff;border-radius:16px;padding:2rem;max-width:640px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative}
+    #evModalTitle{font-size:1.1rem;font-weight:700;color:#0f172a;margin-bottom:1.25rem;padding-right:2rem}
+    .ev-item{display:flex;align-items:center;gap:1rem;padding:.75rem;border-radius:10px;border:1px solid #e2e8f0;margin-bottom:.6rem;background:#f8fafc}
+    .ev-icon{font-size:1.6rem;flex-shrink:0}
+    .ev-info{flex:1;min-width:0}
+    .ev-name{font-weight:600;color:#0f172a;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ev-meta{font-size:.75rem;color:#94a3b8;margin-top:.2rem}
+#evModalClose{position:absolute;top:1rem;right:1rem;background:none;border:none;cursor:pointer;font-size:1.3rem;color:#94a3b8;line-height:1}
+    #evModalClose:hover{color:#0f172a}
     .footer-left p,.footer-right p{margin-bottom:.5rem;color:#475569 !important}
     .footer-right{text-align:right}
     @media(max-width:1200px){.charts-grid{grid-template-columns:1fr}}
@@ -290,6 +310,7 @@ function generateHtmlReport(data: ReportData): string {
             <th>Jira Key</th><th>Summary</th><th>Status</th>
             <th>Started</th><th>Finished</th><th>Duration</th>
             <th>Priority</th><th>Comment</th>
+            <th id="thEvidence" style="display:none">Evidence</th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -306,6 +327,14 @@ function generateHtmlReport(data: ReportData): string {
         <p>Powered by Xray Cloud GraphQL API</p>
         <p>Dashboard v2.0 &mdash; Executive Intelligence Mode</p>
       </div>
+    </div>
+  </div>
+
+  <div id="evModal">
+    <div id="evModalBox">
+      <button id="evModalClose" onclick="closeEvidenceModal()">&#x2715;</button>
+      <div id="evModalTitle"></div>
+      <div id="evModalList"></div>
     </div>
   </div>
 
@@ -422,6 +451,7 @@ function generateHtmlReport(data: ReportData): string {
       document.getElementById('tabNoEvidence').style.borderBottom = isNo ? '3px solid #0284c7' : '3px solid transparent';
       document.getElementById('tabWithEvidence').style.color        = isNo ? '#94a3b8' : '#10b981';
       document.getElementById('tabWithEvidence').style.borderBottom = isNo ? '3px solid transparent' : '3px solid #10b981';
+      document.getElementById('thEvidence').style.display = isNo ? 'none' : '';
       renderTable();
     }
 
@@ -434,7 +464,11 @@ function generateHtmlReport(data: ReportData): string {
       const badgeStyle = isNoEvidence
         ? 'background:#10b98122;color:#10b981'
         : 'background:#06b6d422;color:#0284c7';
-      document.getElementById('tableBody').innerHTML = pageRows.map(r => \`
+      document.getElementById('tableBody').innerHTML = pageRows.map((r, i) => {
+        const evBtn = (!isNoEvidence && r.evidenceFiles && r.evidenceFiles.length > 0)
+          ? \`<button class="ev-btn" onclick="openEvidenceModal(\${start + i})">&#128065; \${r.evidenceFiles.length} file\${r.evidenceFiles.length > 1 ? 's' : ''}</button>\`
+          : '';
+        return \`
         <tr\${r.zeroDur ? ' class="zero-dur"' : ''}>
           <td><a href="\${JIRA_BASE_URL}/browse/\${r.jiraKey}" target="_blank" style="color:#0284c7;text-decoration:none;font-weight:500">\${r.jiraKey}</a></td>
           <td>\${r.jiraSummary}</td>
@@ -444,7 +478,9 @@ function generateHtmlReport(data: ReportData): string {
           <td>\${r.duration}</td>
           <td>\${r.jiraPriority}</td>
           <td>\${r.comment}</td>
-        </tr>\`).join('');
+          \${!isNoEvidence ? \`<td>\${evBtn}</td>\` : ''}
+        </tr>\`;
+      }).join('');
       renderPaginator('paginatorTop');
       renderPaginator('paginatorBottom');
     }
@@ -474,6 +510,49 @@ function generateHtmlReport(data: ReportData): string {
     }
 
     renderTable();
+
+    // --- Evidence modal ---
+    function fileIcon(filename) {
+      const ext = (filename || '').split('.').pop().toLowerCase();
+      if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return '🖼️';
+      if (['mp4','mov','avi','webm'].includes(ext)) return '🎬';
+      if (['pdf'].includes(ext)) return '📄';
+      if (['zip','rar','7z'].includes(ext)) return '🗜️';
+      if (['json','xml','csv','txt','log'].includes(ext)) return '📋';
+      return '📎';
+    }
+
+    function formatSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function openEvidenceModal(rowIdx) {
+      const row = datasets['withEvidence'][rowIdx];
+      const files = row.evidenceFiles || [];
+      document.getElementById('evModalTitle').textContent =
+        (row.jiraKey !== '—' ? row.jiraKey + ' — ' : '') + row.jiraSummary;
+      document.getElementById('evModalList').innerHTML = files.map(f => \`
+        <div class="ev-item">
+          <span class="ev-icon">\${fileIcon(f.filename)}</span>
+          <div class="ev-info">
+            <div class="ev-name" title="\${f.filename}">\${f.filename}</div>
+            <div class="ev-meta">\${formatSize(f.size)}\${f.fromStep ? ' &nbsp;·&nbsp; from step' : ''}\${f.createdOn ? ' &nbsp;·&nbsp; ' + f.createdOn.slice(0,10) : ''}</div>
+          </div>
+        </div>
+      \`).join('') || '<p style="color:#94a3b8;text-align:center">No evidence files found</p>';
+      document.getElementById('evModal').classList.add('open');
+    }
+
+    function closeEvidenceModal() {
+      document.getElementById('evModal').classList.remove('open');
+    }
+
+    document.getElementById('evModal').addEventListener('click', function(e) {
+      if (e.target === this) closeEvidenceModal();
+    });
   </script>
 </body>
 </html>`.trim();

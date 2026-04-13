@@ -14,6 +14,14 @@ export interface Trace {
   Segments: TraceSegment[];
 }
 
+export interface EvidenceFile {
+  id: string;
+  filename: string;
+  size?: number;
+  createdOn?: string;
+  fromStep?: boolean;
+}
+
 export interface TestRunNoEvidenceRow {
   execution: string;
   testRunId: string;
@@ -22,6 +30,7 @@ export interface TestRunNoEvidenceRow {
   finishedOn?: string;
   executedById?: string;
   comment?: string;
+  evidenceFiles?: EvidenceFile[];
 }
 
 function parseSegment(trace: Trace): TraceSegmentDoc | null {
@@ -68,6 +77,10 @@ export function findNoEvidenceTestRuns(traces: Trace[]): Array<{ traceId: string
 const COMPLETED_STATUSES = new Set(['PASSED', 'PASS', 'FAILED', 'FAIL']);
 
 function buildRow(executionKey: string, tr: any): TestRunNoEvidenceRow {
+  const runEvidence: EvidenceFile[] = (tr.evidence ?? []).map((e: any) => ({ ...e, fromStep: false }));
+  const stepEvidence: EvidenceFile[] = (tr.steps ?? []).flatMap((s: any) =>
+    (s.evidence ?? []).map((e: any) => ({ ...e, fromStep: true }))
+  );
   return {
     execution: executionKey,
     testRunId: String(tr.id ?? 'unknown'),
@@ -75,7 +88,8 @@ function buildRow(executionKey: string, tr: any): TestRunNoEvidenceRow {
     startedOn: tr.startedOn,
     finishedOn: tr.finishedOn,
     executedById: tr.executedById,
-    comment: tr.comment
+    comment: tr.comment,
+    evidenceFiles: [...runEvidence, ...stepEvidence]
   };
 }
 
