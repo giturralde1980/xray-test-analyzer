@@ -8,6 +8,7 @@ Tool for analyzing test execution runs in **Xray Cloud** (Jira). It queries the 
 
 - [Description](#description)
 - [Architecture & Data Flow](#architecture--data-flow)
+- [API Call Optimization](#api-call-optimization)
 - [Project Structure](#project-structure)
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -95,6 +96,44 @@ This project was created to audit **evidence coverage** in test executions manag
                        │
          [GitHub Actions only] → Email report via Gmail SMTP
 ```
+
+---
+
+## API Call Optimization
+
+The tool is designed to minimize external API calls. All data is fetched in bulk at startup — the generated HTML report is fully self-contained and requires **zero additional API calls** once rendered in the browser.
+
+### Real example — Release `r13`
+
+| # | Service | Method | Endpoint | Purpose | Result |
+|---|---------|--------|----------|---------|--------|
+| 1 | Xray | `POST` | `/api/v2/authenticate` | Obtain Bearer token | Token (441 chars) |
+| 2 | Xray | `POST` | `/api/v2/graphql` | Fetch executions — page 1 | 100 of 295 executions |
+| 3 | Xray | `POST` | `/api/v2/graphql` | Fetch executions — page 2 | 100 of 295 executions |
+| 4 | Xray | `POST` | `/api/v2/graphql` | Fetch executions — page 3 | 95 of 295 executions |
+| 5 | Jira | `POST` | `/rest/api/3/search/jql` | Enrich issues — batch 1 | 100 of 233 issues |
+| 6 | Jira | `POST` | `/rest/api/3/search/jql` | Enrich issues — batch 2 | 100 of 233 issues |
+| 7 | Jira | `POST` | `/rest/api/3/search/jql` | Enrich issues — batch 3 | 33 of 233 issues |
+
+**Total: 7 API calls** to generate a complete report for 295 executions and 275 test runs.
+
+### How the optimization works
+
+**Xray — auto-pagination**
+GraphQL queries fetch 100 executions per page. The client auto-paginates until all results are retrieved: `ceil(total / 100)` calls.
+
+**Jira — bulk JQL search**
+Instead of one REST call per row (which would mean one call per test run), all unique execution IDs are collected, deduplicated, and fetched in a single `id IN (id1, id2, ...)` JQL query, batched at 100 per call.
+
+The 233 unique Jira issues cover both tabs — **Without Evidence (142)** and **With Evidence (58)** — and are fetched in a single combined pass. Many test runs share the same execution ID, so deduplication reduces the call count significantly.
+
+**Comparison vs. naive approach (one call per row):**
+
+| Approach | Xray calls | Jira calls | Total |
+|----------|-----------|------------|-------|
+| Naive (1 call per row) | 4 | 200+ | **204+** |
+| Optimized (bulk) | 4 | 3 | **7** |
+| **Reduction** | — | **98%** | **96.6%** |
 
 ---
 
@@ -191,6 +230,17 @@ OUTPUT_FILE=output/report.html
 # Set to true to skip real API calls and use mock data instead.
 # Useful for testing the report UI without valid credentials.
 USE_SAMPLE_DATA=false
+
+# ─── Jira REST API ───────────────────────────────────────────────────────────
+# Base URL of your Jira Cloud instance (no trailing slash).
+# Used to build clickable issue links in the report and to call the Jira REST API.
+JIRA_BASE_URL=https://your-org.atlassian.net
+
+# Basic Auth token for Jira REST API v3.
+# Value must be the Base64 encoding of "email@example.com:api_token".
+# Generate an API token at: Jira → Profile → Security → API tokens
+# Then encode: echo -n "email@example.com:your_token" | base64
+JIRA_AUTH_TOKEN=your_base64_encoded_email_and_token_here
 ```
 
 ---
@@ -254,14 +304,25 @@ The report is a **self-contained HTML file** (no server required, opens directly
 
 ### KPI Cards
 
+KPIs are displayed in two rows of four cards each.
+
+**Row 1 — Execution overview**
+
 | Card | Description |
 |------|-------------|
 | Pass Rate | % of PASSED test runs out of all completed runs |
 | Evidence Coverage | % of PASSED tests that have evidence attached |
 | Executing | Test runs currently in EXECUTING status |
 | Pending | Test runs in TO DO status |
-| Failed | Count of failed runs (only shown if > 0) |
-| Avg Duration | Average run duration formatted as HH:MM:SS |
+
+**Row 2 — Quality signals**
+
+| Card | Description |
+|------|-------------|
+| Failed | Count of failed runs (shown in green as 0 when no failures) |
+| Avg Duration | Average run duration in minutes and hours |
+| Suspicious — Zero Duration | Runs that completed in 0 min (likely not actually executed) |
+| Suspicious — Over 8h | Runs with duration > 8 hours (possible data quality issue) |
 
 ### Charts (Chart.js v3.9.1)
 
@@ -304,6 +365,8 @@ Go to **Actions** tab in GitHub → select _Xray Evidence Report_ → **Run work
 | `XRAY_CLIENT_ID` | Xray Cloud Client ID |
 | `XRAY_CLIENT_SECRET` | Xray Cloud Client Secret |
 | `XRAY_JQL` | JQL query string (with `XRAY_VERSION_PLACEHOLDER`) |
+| `JIRA_BASE_URL` | Jira Cloud instance base URL (e.g. `https://your-org.atlassian.net`) |
+| `JIRA_AUTH_TOKEN` | Base64 of `email:api_token` for Jira REST API authentication |
 | `GMAIL_USER` | Gmail account used to send the report |
 | `GMAIL_APP_PASSWORD` | Gmail app-specific password (not the main account password) |
 | `MAIL_TO` | Default email recipient(s) for the report |
@@ -328,6 +391,8 @@ Go to **Actions** tab in GitHub → select _Xray Evidence Report_ → **Run work
 | `XRAY_CLIENT_ID` | Yes | — | 32-char hex Client ID from Xray Cloud API Keys settings |
 | `XRAY_CLIENT_SECRET` | Yes | — | 64-char hex Client Secret paired with the Client ID |
 | `XRAY_JQL` | Yes | — | JQL query using `XRAY_VERSION_PLACEHOLDER` as the version marker |
+| `JIRA_BASE_URL` | Yes | `https://opella-health.atlassian.net` | Jira instance base URL, used to build clickable issue links and for the REST API |
+| `JIRA_AUTH_TOKEN` | Yes | — | Base64 of `email@example.com:api_token`. Generate at Jira → Profile → Security → API tokens |
 | `OUTPUT_FILE` | No | `output/report.html` | Base output path (actual filename includes version and timestamp) |
 | `USE_SAMPLE_DATA` | No | `false` | Set to `true` to skip API calls and use mock data |
 
