@@ -20,10 +20,14 @@ on:
         options:
           - 'false'
           - 'true'
+      jql_query:
+        description: 'JQL query to filter test executions (leave empty to use the repo default)'
+        required: false
+        default: ''
 
   # External API trigger — called from Copado, Jira, or any platform via curl:
   #   POST https://api.github.com/repos/{owner}/{repo}/dispatches
-  #   Body: { "event_type": "xray-report", "client_payload": { "release_version": "r15", "email_to": "...", "use_sample_data": "false" } }
+  #   Body: { "event_type": "xray-report", "client_payload": { "release_version": "r15", "email_to": "...", "use_sample_data": "false", "jql_query": "..." } }
   #   Header: Authorization: Bearer <GITHUB_PAT>  (needs repo scope or actions:write)
   repository_dispatch:
     types: [xray-report]
@@ -62,7 +66,7 @@ jobs:
           XRAY_API_BASE_URL:   ${{ secrets.XRAY_API_BASE_URL }}
           XRAY_CLIENT_ID:      ${{ secrets.XRAY_CLIENT_ID }}
           XRAY_CLIENT_SECRET:  ${{ secrets.XRAY_CLIENT_SECRET }}
-          XRAY_JQL:            ${{ secrets.XRAY_JQL }}
+          XRAY_JQL:            ${{ github.event.inputs.jql_query || github.event.client_payload.jql_query || secrets.XRAY_JQL }}
           JIRA_BASE_URL:       ${{ secrets.JIRA_BASE_URL }}
           JIRA_AUTH_TOKEN:     ${{ secrets.JIRA_AUTH_TOKEN }}
           OUTPUT_FILE:         output/report.html
