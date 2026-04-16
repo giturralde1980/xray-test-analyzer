@@ -152,17 +152,21 @@ jobs:
           echo "SF Evidence__c record created: ${RECORD_ID}"
 
           # 3. Encode HTML report as base64 and upload as Salesforce File (ContentVersion)
+          # Write body to a temp file via jq to avoid "Argument list too long" on large reports
           FILE_B64=$(base64 -w 0 "${REPORT_FILE}")
           FILE_NAME=$(basename "${REPORT_FILE}")
+
+          CV_BODY=$(mktemp)
+          jq -n \
+            --arg title "XRAY Report - ${RELEASE_VERSION} - Run #${{ github.run_number }}" \
+            --arg path "${FILE_NAME}" \
+            --arg data "${FILE_B64}" \
+            '{Title: $title, PathOnClient: $path, VersionData: $data}' > "${CV_BODY}"
 
           CV_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/ContentVersion/" \
             -H "Authorization: Bearer ${ACCESS_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"Title\":         \"XRAY Report - ${RELEASE_VERSION} - Run #${{ github.run_number }}\",
-              \"PathOnClient\":  \"${FILE_NAME}\",
-              \"VersionData\":   \"${FILE_B64}\"
-            }")
+            --data @"${CV_BODY}")
 
           CV_ID=$(echo "${CV_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
           echo "ContentVersion created: ${CV_ID}"
