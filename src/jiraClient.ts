@@ -94,3 +94,49 @@ export async function fetchJiraIssuesForExecutions(
   console.log(`Jira enrichment complete: ${result.size} issues fetched in ${Math.ceil(uniqueIssueIds.length / JIRA_BATCH_SIZE)} call(s).`);
   return result;
 }
+
+/**
+ * Fetches bugs filed in Jira for a given release label.
+ * Uses JQL: labels = "{releaseVersion}" AND issuetype = "Bug"
+ * Returns total count and the list of issue keys.
+ */
+export async function fetchJiraBugsForRelease(
+  releaseVersion: string
+): Promise<{ total: number; keys: string[] }> {
+  const { jiraBaseUrl, jiraAuthToken } = config;
+
+  if (!jiraBaseUrl || !jiraAuthToken) {
+    console.warn('Jira credentials not configured — skipping bug count.');
+    return { total: 0, keys: [] };
+  }
+
+  const jql = `labels = "${releaseVersion}" AND issuetype = "Bug"`;
+  const url = `${jiraBaseUrl}/rest/api/3/search/jql`;
+
+  try {
+    console.log(`Jira bug query: ${jql}`);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${jiraAuthToken}`
+      },
+      body: JSON.stringify({ jql, fields: ['summary'], maxResults: 100 })
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`Jira bug query failed: ${res.status} ${text}`);
+      return { total: 0, keys: [] };
+    }
+
+    const data = await res.json();
+    const keys = (data.issues ?? []).map((i: any) => i.key as string);
+    console.log(`Jira bugs for ${releaseVersion}: ${data.total ?? keys.length} total`);
+    return { total: data.total ?? keys.length, keys };
+  } catch (err) {
+    console.warn('Error fetching Jira bugs:', err);
+    return { total: 0, keys: [] };
+  }
+}

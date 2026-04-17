@@ -4,8 +4,8 @@ import path from 'path';
 import config from './config';
 import { fetchTestExecutions } from './xrayClient';
 import { getXrayToken } from './xrayAuth';
-import { findNoEvidenceTestRunsInExecutions } from './filters';
-import { fetchJiraIssuesForExecutions, fetchJiraBugsForRelease } from './jiraClient';
+import { findNoEvidenceTestRunsInExecutions, findWithEvidenceTestRunsInExecutions } from './filters';
+import { fetchJiraIssuesForExecutions } from './jiraClient';
 
 interface ReportData {
   totalExecutions: number;
@@ -29,8 +29,7 @@ interface ReportData {
   executorPerformance: Array<{ name: string; total: number; passed: number; passRate: number }>;
   dateDistribution: Array<{ date: string; count: number }>;
   noEvidenceRows: Array<any>;
-  priorityBreakdown: Record<string, number>;
-  bugCount: number;
+  withEvidenceRows: Array<any>;
   timestamp: string;
   releaseVersion: string;
 }
@@ -100,6 +99,7 @@ function generateHtmlReport(data: ReportData): string {
   );
 
   const noEvidenceRowsJson = serializeRows(filteredRows);
+  const withEvidenceRowsJson = serializeRows(data.withEvidenceRows);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -221,24 +221,17 @@ function generateHtmlReport(data: ReportData): string {
       </div>
     </div>
     <div class="kpi-grid" style="margin-top:-1rem">
-      ${(() => {
-        const bugAlert = failedCount === 0
-          ? `<div class="kpi-subtext" style="color:#059669;margin-top:.4rem">No failures</div>`
-          : failedCount === data.bugCount
-          ? `<div class="kpi-subtext" style="color:#10b981;margin-top:.4rem">&#10003; ${data.bugCount} bug(s) filed — matches</div>`
-          : data.bugCount === 0
-          ? `<div class="kpi-subtext" style="color:#ef4444;font-weight:700;margin-top:.4rem">&#9888; No bugs filed!</div>`
-          : `<div class="kpi-subtext" style="color:#f59e0b;font-weight:700;margin-top:.4rem">&#9888; ${data.bugCount} bug(s) filed vs ${failedCount} failures</div>`;
-        const cardStyle = failedCount === 0
-          ? `border-color:rgba(16,185,129,.2);background:#f0fdf4 !important`
-          : `border-color:rgba(239,68,68,.3);background:#fff5f5 !important`;
-        const valueStyle = failedCount === 0 ? `color:#059669` : `color:#ef4444`;
-        return `<div class="kpi-card" style="${cardStyle}">
-        <div class="kpi-label" style="${valueStyle}">Failed</div>
-        <div class="kpi-value" style="${valueStyle}">${failedCount}</div>
-        ${bugAlert}
-      </div>`;
-      })()}
+      ${failedCount > 0 ? `
+      <div class="kpi-card failed">
+        <div class="kpi-label">Failed</div>
+        <div class="kpi-value">${failedCount}</div>
+        <div class="kpi-subtext">Require attention</div>
+      </div>` : `
+      <div class="kpi-card" style="border-color:rgba(16,185,129,.2);background:#f0fdf4 !important">
+        <div class="kpi-label" style="color:#059669">Failed</div>
+        <div class="kpi-value" style="color:#059669">0</div>
+        <div class="kpi-subtext">No failures</div>
+      </div>`}
       <div class="kpi-card duration">
         <div class="kpi-label">Avg Duration</div>
         <div class="kpi-value">${data.avgDuration.toFixed(1)}m</div>
@@ -256,20 +249,6 @@ function generateHtmlReport(data: ReportData): string {
         <div class="kpi-subtext">Duration &gt; 8h — possible data issue</div>
       </div>
     </div>
-    <div class="kpi-grid" style="margin-top:-1rem">
-      ${(['Critical','High','Medium','Low'] as const).map(p => {
-        const count = data.priorityBreakdown[p] || 0;
-        const colors: Record<string, string> = { Critical: '#dc2626', High: '#f97316', Medium: '#f59e0b', Low: '#10b981' };
-        const bgs:    Record<string, string> = { Critical: '#fef2f2', High: '#fff7ed', Medium: '#fffbeb', Low: '#f0fdf4' };
-        const c = colors[p]; const bg = bgs[p];
-        return `<div class="kpi-card" style="border-color:${c}44;background:${bg} !important">
-          <div class="kpi-label" style="color:${c}">${p} Priority</div>
-          <div class="kpi-value" style="color:${c}">${count}</div>
-          <div class="kpi-subtext">without evidence</div>
-        </div>`;
-      }).join('')}
-    </div>
-
     ${data.emptyExecutions > 0 ? `
     <div style="margin-top:-1.5rem;margin-bottom:2rem;color:#475569;font-size:.85rem;display:flex;align-items:center;gap:.5rem">
       <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#475569"></span>
@@ -314,12 +293,16 @@ function generateHtmlReport(data: ReportData): string {
     </div>
 
     <div class="table-container">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
-        <div>
-          <div class="table-title">Passed Without Evidence</div>
-          <div class="table-subtitle">${data.breakdown.passedWithoutEvidence} test run(s) passed with no proof attached</div>
+      <div style="display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid #e2e8f0">
+        <button id="tabNoEvidence" onclick="switchTab('noEvidence')" style="padding:.75rem 1.5rem;border:none;background:none;cursor:pointer;font-size:.95rem;font-weight:600;color:#0284c7;border-bottom:3px solid #0284c7;margin-bottom:-2px;transition:all .2s">
+          ✗ Without Evidence &nbsp;<span style="background:#ef444422;color:#ef4444;border-radius:20px;padding:.1rem .6rem;font-size:.8rem">${data.breakdown.passedWithoutEvidence}</span>
+        </button>
+        <button id="tabWithEvidence" onclick="switchTab('withEvidence')" style="padding:.75rem 1.5rem;border:none;background:none;cursor:pointer;font-size:.95rem;font-weight:600;color:#94a3b8;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s">
+          ✓ With Evidence &nbsp;<span style="background:#10b98122;color:#10b981;border-radius:20px;padding:.1rem .6rem;font-size:.8rem">${data.breakdown.passedWithEvidence}</span>
+        </button>
+        <div style="flex:1;display:flex;justify-content:flex-end;align-items:center;padding-right:.25rem">
+          <div id="paginatorTop" style="display:flex;align-items:center;gap:.75rem;font-size:.9rem;color:#94a3b8"></div>
         </div>
-        <div id="paginatorTop" style="display:flex;align-items:center;gap:.75rem;font-size:.9rem;color:#94a3b8"></div>
       </div>
       <table>
         <thead>
@@ -327,6 +310,7 @@ function generateHtmlReport(data: ReportData): string {
             <th>Jira Key</th><th>Summary</th><th>Status</th>
             <th>Started</th><th>Finished</th><th>Duration</th>
             <th>Priority</th><th>Comment</th>
+            <th id="thEvidence" style="display:none">Evidence</th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -343,6 +327,14 @@ function generateHtmlReport(data: ReportData): string {
         <p>Powered by Xray Cloud GraphQL API</p>
         <p>Dashboard v2.0 &mdash; Executive Intelligence Mode</p>
       </div>
+    </div>
+  </div>
+
+  <div id="evModal">
+    <div id="evModalBox">
+      <button id="evModalClose" onclick="closeEvidenceModal()">&#x2715;</button>
+      <div id="evModalTitle"></div>
+      <div id="evModalList"></div>
     </div>
   </div>
 
@@ -442,26 +434,53 @@ function generateHtmlReport(data: ReportData): string {
       }
     });
 
-    // --- Pagination ---
+    // --- Tabs + Pagination ---
     const JIRA_BASE_URL = '${config.jiraBaseUrl}';
-    const rows = ${noEvidenceRowsJson};
+    const datasets = {
+      noEvidence:   ${noEvidenceRowsJson},
+      withEvidence: ${withEvidenceRowsJson}
+    };
     const PAGE_SIZE = 20;
-    let currentPage = 1;
+    let activeTab = 'noEvidence';
+    const pages = { noEvidence: 1, withEvidence: 1 };
+
+    function switchTab(tab) {
+      activeTab = tab;
+      const isNo = tab === 'noEvidence';
+      document.getElementById('tabNoEvidence').style.color        = isNo ? '#0284c7' : '#94a3b8';
+      document.getElementById('tabNoEvidence').style.borderBottom = isNo ? '3px solid #0284c7' : '3px solid transparent';
+      document.getElementById('tabWithEvidence').style.color        = isNo ? '#94a3b8' : '#10b981';
+      document.getElementById('tabWithEvidence').style.borderBottom = isNo ? '3px solid transparent' : '3px solid #10b981';
+      document.getElementById('thEvidence').style.display = isNo ? 'none' : '';
+      renderTable();
+    }
 
     function renderTable() {
-      const start = (currentPage - 1) * PAGE_SIZE;
+      const rows = datasets[activeTab];
+      const page = pages[activeTab];
+      const start = (page - 1) * PAGE_SIZE;
       const pageRows = rows.slice(start, start + PAGE_SIZE);
-      document.getElementById('tableBody').innerHTML = pageRows.map(r => \`
+      const isNoEvidence = activeTab === 'noEvidence';
+      const badgeStyle = isNoEvidence
+        ? 'background:#10b98122;color:#10b981'
+        : 'background:#06b6d422;color:#0284c7';
+      document.getElementById('tableBody').innerHTML = pageRows.map((r, i) => {
+        const evBtn = (!isNoEvidence && r.evidenceFiles && r.evidenceFiles.length > 0)
+          ? \`<button class="ev-btn" onclick="openEvidenceModal(\${start + i})">&#128065; \${r.evidenceFiles.length} file\${r.evidenceFiles.length > 1 ? 's' : ''}</button>\`
+          : '';
+        return \`
         <tr\${r.zeroDur ? ' class="zero-dur"' : ''}>
           <td><a href="\${JIRA_BASE_URL}/browse/\${r.jiraKey}" target="_blank" style="color:#0284c7;text-decoration:none;font-weight:500">\${r.jiraKey}</a></td>
           <td>\${r.jiraSummary}</td>
-          <td><span class="badge" style="background:#10b98122;color:#10b981">\${r.status}</span></td>
+          <td><span class="badge" style="\${badgeStyle}">\${r.status}</span></td>
           <td>\${r.startedOn}</td>
           <td>\${r.finishedOn}</td>
           <td>\${r.duration}</td>
           <td>\${r.jiraPriority}</td>
           <td>\${r.comment}</td>
-        </tr>\`).join('');
+          \${!isNoEvidence ? \`<td>\${evBtn}</td>\` : ''}
+        </tr>\`;
+      }).join('');
       renderPaginator('paginatorTop');
       renderPaginator('paginatorBottom');
     }
@@ -471,23 +490,69 @@ function generateHtmlReport(data: ReportData): string {
     }
 
     function renderPaginator(id) {
+      const rows = datasets[activeTab];
+      const page = pages[activeTab];
       const tp = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
       document.getElementById(id).innerHTML = \`
-        <button \${btnStyle(currentPage === 1)} \${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(\${currentPage - 1})">&#8592; Prev</button>
-        <span>Page <strong style="color:#334155">\${currentPage}</strong> of <strong style="color:#334155">\${tp}</strong> &nbsp;·&nbsp; \${rows.length} records</span>
-        <button \${btnStyle(currentPage === tp)} \${currentPage === tp ? 'disabled' : ''} onclick="goToPage(\${currentPage + 1})">Next &#8594;</button>
+        <button \${btnStyle(page === 1)} \${page === 1 ? 'disabled' : ''} onclick="goToPage(\${page - 1})">&#8592; Prev</button>
+        <span>Page <strong style="color:#334155">\${page}</strong> of <strong style="color:#334155">\${tp}</strong> &nbsp;·&nbsp; \${rows.length} records</span>
+        <button \${btnStyle(page === tp)} \${page === tp ? 'disabled' : ''} onclick="goToPage(\${page + 1})">Next &#8594;</button>
       \`;
     }
 
     function goToPage(page) {
+      const rows = datasets[activeTab];
       const tp = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
       if (page < 1 || page > tp) return;
-      currentPage = page;
+      pages[activeTab] = page;
       renderTable();
       document.querySelector('.table-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     renderTable();
+
+    // --- Evidence modal ---
+    function fileIcon(filename) {
+      const ext = (filename || '').split('.').pop().toLowerCase();
+      if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return '🖼️';
+      if (['mp4','mov','avi','webm'].includes(ext)) return '🎬';
+      if (['pdf'].includes(ext)) return '📄';
+      if (['zip','rar','7z'].includes(ext)) return '🗜️';
+      if (['json','xml','csv','txt','log'].includes(ext)) return '📋';
+      return '📎';
+    }
+
+    function formatSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function openEvidenceModal(rowIdx) {
+      const row = datasets['withEvidence'][rowIdx];
+      const files = row.evidenceFiles || [];
+      document.getElementById('evModalTitle').textContent =
+        (row.jiraKey !== '—' ? row.jiraKey + ' — ' : '') + row.jiraSummary;
+      document.getElementById('evModalList').innerHTML = files.map(f => \`
+        <div class="ev-item">
+          <span class="ev-icon">\${fileIcon(f.filename)}</span>
+          <div class="ev-info">
+            <div class="ev-name" title="\${f.filename}">\${f.filename}</div>
+            <div class="ev-meta">\${formatSize(f.size)}\${f.fromStep ? ' &nbsp;·&nbsp; from step' : ''}\${f.createdOn ? ' &nbsp;·&nbsp; ' + f.createdOn.slice(0,10) : ''}</div>
+          </div>
+        </div>
+      \`).join('') || '<p style="color:#94a3b8;text-align:center">No evidence files found</p>';
+      document.getElementById('evModal').classList.add('open');
+    }
+
+    function closeEvidenceModal() {
+      document.getElementById('evModal').classList.remove('open');
+    }
+
+    document.getElementById('evModal').addEventListener('click', function(e) {
+      if (e.target === this) closeEvidenceModal();
+    });
   </script>
 </body>
 </html>`.trim();
@@ -575,10 +640,13 @@ async function main(): Promise<void> {
   });
 
   const noEvidenceRows = findNoEvidenceTestRunsInExecutions(executions.results);
+  const withEvidenceRows = findWithEvidenceTestRunsInExecutions(executions.results);
 
-  const allExecutionKeys = noEvidenceRows
-    .filter((r) => (r.status || '').toUpperCase() === 'PASSED')
-    .map((r) => r.execution);
+  // Combine both sets for a single Jira batch lookup
+  const allExecutionKeys = [
+    ...noEvidenceRows.filter((r) => (r.status || '').toUpperCase() === 'PASSED').map((r) => r.execution),
+    ...withEvidenceRows.map((r) => r.execution)
+  ];
   const jiraInfoMap = await fetchJiraIssuesForExecutions(allExecutionKeys);
 
   const enrichRow = (row: any) => {
@@ -593,16 +661,7 @@ async function main(): Promise<void> {
   };
 
   const noEvidenceRowsEnriched = noEvidenceRows.map(enrichRow);
-
-  // Priority breakdown from enriched rows
-  const priorityBreakdown: Record<string, number> = {};
-  noEvidenceRowsEnriched.forEach((row) => {
-    const p = row.jiraPriority || 'Unknown';
-    priorityBreakdown[p] = (priorityBreakdown[p] || 0) + 1;
-  });
-
-  // Bug count for this release
-  const { total: bugCount } = await fetchJiraBugsForRelease(config.releaseVersion);
+  const withEvidenceRowsEnriched = withEvidenceRows.map(enrichRow);
 
   const executorPerformance = Object.entries(executorMap)
     .map(([name, stats]) => ({
@@ -650,8 +709,7 @@ async function main(): Promise<void> {
     statusCounts,
     breakdown,
     noEvidenceRows: noEvidenceRowsEnriched,
-    priorityBreakdown,
-    bugCount,
+    withEvidenceRows: withEvidenceRowsEnriched,
     timestamp: new Date().toLocaleString('en-US', { hour12: false }),
     releaseVersion: config.releaseVersion,
     avgDuration,
