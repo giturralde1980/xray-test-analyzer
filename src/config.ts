@@ -15,6 +15,7 @@ interface Config {
   jiraAuthToken: string;
   confluenceSpaceKey: string;
   confluenceParentPageId: string;
+  createConfluencePage: boolean;
 }
 
 const config: Config = {
@@ -28,6 +29,7 @@ const config: Config = {
   jiraBaseUrl: process.env.JIRA_BASE_URL || 'https://opella-health.atlassian.net',
   jiraAuthToken: process.env.JIRA_AUTH_TOKEN || '',
   confluenceSpaceKey: process.env.CONFLUENCE_SPACE_KEY || '',
-  confluenceParentPageId: process.env.CONFLUENCE_PARENT_PAGE_ID || ''};
+  confluenceParentPageId: process.env.CONFLUENCE_PARENT_PAGE_ID || '',
+  createConfluencePage: process.env.CREATE_CONFLUENCE_PAGE === 'true'};
 
 export default config;

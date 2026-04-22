@@ -20,6 +20,22 @@ on:
         options:
           - 'false'
           - 'true'
+      create_confluence_page:
+        description: 'Create a Confluence page with the report'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      confluence_space_key:
+        description: 'Confluence space key (overrides secret CONFLUENCE_SPACE_KEY)'
+        required: false
+        default: ''
+      confluence_parent_page_id:
+        description: 'Confluence parent page ID (overrides secret CONFLUENCE_PARENT_PAGE_ID)'
+        required: false
+        default: ''
 
   # External API trigger — called from Copado, Jira, or any platform via curl:
   #   POST https://api.github.com/repos/{owner}/{repo}/dispatches
@@ -63,9 +79,12 @@ jobs:
           XRAY_CLIENT_ID:      ${{ secrets.XRAY_CLIENT_ID }}
           XRAY_CLIENT_SECRET:  ${{ secrets.XRAY_CLIENT_SECRET }}
           XRAY_JQL:            ${{ secrets.XRAY_JQL }}
-          JIRA_BASE_URL:       ${{ secrets.JIRA_BASE_URL }}
-          JIRA_AUTH_TOKEN:     ${{ secrets.JIRA_AUTH_TOKEN }}
-          OUTPUT_FILE:         output/report.html
+          JIRA_BASE_URL:              ${{ secrets.JIRA_BASE_URL }}
+          JIRA_AUTH_TOKEN:            ${{ secrets.JIRA_AUTH_TOKEN }}
+          CREATE_CONFLUENCE_PAGE:     ${{ github.event.inputs.create_confluence_page || github.event.client_payload.create_confluence_page || 'false' }}
+          CONFLUENCE_SPACE_KEY:       ${{ github.event.inputs.confluence_space_key || github.event.client_payload.confluence_space_key || secrets.CONFLUENCE_SPACE_KEY }}
+          CONFLUENCE_PARENT_PAGE_ID:  ${{ github.event.inputs.confluence_parent_page_id || github.event.client_payload.confluence_parent_page_id || secrets.CONFLUENCE_PARENT_PAGE_ID }}
+          OUTPUT_FILE:                output/report.html
         run: |
           mkdir -p output
           npm start
