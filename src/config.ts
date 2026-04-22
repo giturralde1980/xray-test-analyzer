@@ -13,6 +13,8 @@ interface Config {
   releaseVersion: string;
   jiraBaseUrl: string;
   jiraAuthToken: string;
+  confluenceSpaceKey: string;
+  confluenceParentPageId: string;
 }
 
 const config: Config = {
@@ -24,6 +26,8 @@ const config: Config = {
   xrayJql: process.env.XRAY_JQL || 'labels = "XRAY_VERSION_PLACEHOLDER" AND labels = "uat" AND project = "CHCCRM01" AND type = "test execution" ORDER BY created DESC',
   releaseVersion: process.env.RELEASE_VERSION || 'r12',
   jiraBaseUrl: process.env.JIRA_BASE_URL || 'https://opella-health.atlassian.net',
-  jiraAuthToken: process.env.JIRA_AUTH_TOKEN || ''};
+  jiraAuthToken: process.env.JIRA_AUTH_TOKEN || '',
+  confluenceSpaceKey: process.env.CONFLUENCE_SPACE_KEY || '',
+  confluenceParentPageId: process.env.CONFLUENCE_PARENT_PAGE_ID || ''};
 
 export default config;

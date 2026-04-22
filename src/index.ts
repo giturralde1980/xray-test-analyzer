@@ -6,6 +6,7 @@ import { fetchTestExecutions } from './xrayClient';
 import { getXrayToken } from './xrayAuth';
 import { findNoEvidenceTestRunsInExecutions, findWithEvidenceTestRunsInExecutions } from './filters';
 import { fetchJiraIssuesForExecutions } from './jiraClient';
+import { createConfluencePage } from './confluenceClient';
 
 interface ReportData {
   totalExecutions: number;
@@ -723,6 +724,35 @@ async function main(): Promise<void> {
 
   fs.writeFileSync(outputFile, htmlContent, 'utf-8');
   console.log(`Generated HTML report at ${outputFile}`);
+
+  const passedCount = statusCounts['PASSED'] || statusCounts['PASS'] || 0;
+  const failedCount = statusCounts['FAILED'] || statusCounts['FAIL'] || 0;
+  const confluencePage = await createConfluencePage({
+    releaseVersion: config.releaseVersion,
+    totalExecutions: executions.total,
+    totalTestRuns,
+    passedCount,
+    failedCount,
+    executingCount: breakdown.executing,
+    todoCount: breakdown.toDo,
+    zeroDurationRuns,
+    longDurationRuns,
+    avgDuration,
+    passedWithEvidence: breakdown.passedWithEvidence,
+    passedWithoutEvidence: breakdown.passedWithoutEvidence,
+    statusCounts,
+    noEvidenceRows: noEvidenceRowsEnriched,
+    timestamp: new Date().toLocaleString('en-US', { hour12: false }),
+    htmlContent,
+    htmlFilename: path.basename(outputFile)
+  });
+
+  if (confluencePage) {
+    console.log(`Confluence page: ${confluencePage.url}`);
+    if (process.env.GITHUB_OUTPUT) {
+      fs.appendFileSync(process.env.GITHUB_OUTPUT, `confluence_url=${confluencePage.url}\n`);
+    }
+  }
 }
 
 main().catch((err) => {
