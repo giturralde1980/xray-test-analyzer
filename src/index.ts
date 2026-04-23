@@ -571,6 +571,11 @@ async function main(): Promise<void> {
   const executions = await fetchTestExecutions({ authToken: token, jql, limit: 100 });
   console.log(`Fetched ${executions.total} test execution(s) from Xray.`);
 
+  if (executions.total === 0) {
+    console.warn(`WARNING: No test executions found for project="${config.jiraProject}" release="${config.releaseVersion}". Verify the project key and release version are correct.`);
+    process.exit(1);
+  }
+
   const totalTestRuns = executions.results.reduce((sum, exec) => sum + (exec.testRuns?.total || 0), 0);
   const emptyExecutions = executions.results.filter(exec => (exec.testRuns?.total || 0) === 0).length;
   console.log(`Total test runs across all executions: ${totalTestRuns}`);
