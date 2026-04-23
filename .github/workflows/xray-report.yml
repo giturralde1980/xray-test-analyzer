@@ -139,7 +139,7 @@ jobs:
       #              Triggered_By__c (Text), Summary__c (Long Text Area)
       # ---------------------------------------------------------------------------
       - name: Salesforce callback — report summary + upload HTML
-        if: always()   # runs even if a prior step failed, so SF always gets a result
+        if: steps.generate.conclusion == 'success'
         env:
           SF_CLIENT_ID:      ${{ secrets.SF_CLIENT_ID }}
           SF_CLIENT_SECRET:  ${{ secrets.SF_CLIENT_SECRET }}
