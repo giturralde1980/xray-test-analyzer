@@ -384,7 +384,24 @@ Content-Type: application/json
 }
 ```
 
-### Full payload (with Confluence, custom project)
+### Full payload (all parameters explicit)
+
+```json
+{
+  "event_type": "xray-report",
+  "client_payload": {
+    "release_version": "r14",
+    "email_to": "german.iturralde@gmail.com",
+    "use_sample_data": "false",
+    "jira_project": "CHCCRM01",
+    "create_confluence_page": "false",
+    "confluence_space_key": "DIGITALCOM",
+    "confluence_parent_page_id": "1435632353"
+  }
+}
+```
+
+### With Confluence page creation
 
 ```json
 {
@@ -392,7 +409,7 @@ Content-Type: application/json
   "client_payload": {
     "release_version": "r14",
     "use_sample_data": "false",
-    "jira_project": "MYPROJECT",
+    "jira_project": "CHCCRM01",
     "create_confluence_page": "true",
     "confluence_space_key": "DIGITALCOM",
     "confluence_parent_page_id": "1435632353"
