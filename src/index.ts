@@ -565,7 +565,9 @@ async function main(): Promise<void> {
   const token = await getXrayToken();
   console.log('Xray auth token obtained successfully.');
 
-  const jql = config.xrayJql.replace('XRAY_VERSION_PLACEHOLDER', config.releaseVersion);
+  const jql = config.xrayJql
+    .replace('XRAY_VERSION_PLACEHOLDER', config.releaseVersion)
+    .replace('JIRA_PROJECT_PLACEHOLDER', config.jiraProject);
   const executions = await fetchTestExecutions({ authToken: token, jql, limit: 100 });
   console.log(`Fetched ${executions.total} test execution(s) from Xray.`);
 

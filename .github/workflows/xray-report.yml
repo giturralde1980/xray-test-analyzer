@@ -36,6 +36,10 @@ on:
         description: 'Confluence parent page ID (overrides secret CONFLUENCE_PARENT_PAGE_ID)'
         required: false
         default: ''
+      jira_project:
+        description: 'Jira project key to filter (e.g. CHCCRM01). Defaults to CHCCRM01 if empty.'
+        required: false
+        default: ''
 
   # External API trigger — called from Copado, Jira, or any platform via curl:
   #   POST https://api.github.com/repos/{owner}/{repo}/dispatches
@@ -84,6 +88,7 @@ jobs:
           CREATE_CONFLUENCE_PAGE:     ${{ github.event.inputs.create_confluence_page || github.event.client_payload.create_confluence_page || 'false' }}
           CONFLUENCE_SPACE_KEY:       ${{ github.event.inputs.confluence_space_key || github.event.client_payload.confluence_space_key || secrets.CONFLUENCE_SPACE_KEY }}
           CONFLUENCE_PARENT_PAGE_ID:  ${{ github.event.inputs.confluence_parent_page_id || github.event.client_payload.confluence_parent_page_id || secrets.CONFLUENCE_PARENT_PAGE_ID }}
+          JIRA_PROJECT:               ${{ github.event.inputs.jira_project || github.event.client_payload.jira_project || 'CHCCRM01' }}
           OUTPUT_FILE:                output/report.html
         run: |
           mkdir -p output
