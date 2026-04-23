@@ -3,3 +3,6 @@ dist/
 output/
 .env
 *.js.map
+.DS_Store
+.sfdx/
+scripts/
