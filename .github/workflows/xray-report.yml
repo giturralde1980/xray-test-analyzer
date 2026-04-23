@@ -82,7 +82,6 @@ jobs:
           XRAY_API_BASE_URL:   ${{ secrets.XRAY_API_BASE_URL }}
           XRAY_CLIENT_ID:      ${{ secrets.XRAY_CLIENT_ID }}
           XRAY_CLIENT_SECRET:  ${{ secrets.XRAY_CLIENT_SECRET }}
-          XRAY_JQL:            ${{ secrets.XRAY_JQL }}
           JIRA_BASE_URL:              ${{ secrets.JIRA_BASE_URL }}
           JIRA_AUTH_TOKEN:            ${{ secrets.JIRA_AUTH_TOKEN }}
           CREATE_CONFLUENCE_PAGE:     ${{ github.event.inputs.create_confluence_page || github.event.client_payload.create_confluence_page || 'false' }}
