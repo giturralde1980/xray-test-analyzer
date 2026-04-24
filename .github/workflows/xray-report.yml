@@ -1,0 +1,218 @@
+name: XRAY Evidence Report
+
+on:
+  # Manual trigger — most flexible, lets you pick release on demand
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g. r14, r15)'
+        required: true
+        default: 'r14'
+      email_to:
+        description: 'Recipients (comma-separated, overrides default)'
+        required: false
+        default: ''
+      use_sample_data:
+        description: 'Use sample data instead of real Xray API'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      create_confluence_page:
+        description: 'Create a Confluence page with the report'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      confluence_space_key:
+        description: 'Confluence space key (overrides secret CONFLUENCE_SPACE_KEY)'
+        required: false
+        default: ''
+      confluence_parent_page_id:
+        description: 'Confluence parent page ID (overrides secret CONFLUENCE_PARENT_PAGE_ID)'
+        required: false
+        default: ''
+      jira_project:
+        description: 'Jira project key to filter (e.g. CHCCRM01). Defaults to CHCCRM01 if empty.'
+        required: false
+        default: ''
+      create_salesforce_object:
+        description: 'Create an Evidence__c record in Salesforce and upload the HTML report'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+  # External API trigger — called from Copado, Jira, or any platform via curl:
+  #   POST https://api.github.com/repos/{owner}/{repo}/dispatches
+  #   Body: { "event_type": "xray-report", "client_payload": { "release_version": "r15", "email_to": "...", "use_sample_data": "false" } }
+  #   Header: Authorization: Bearer <GITHUB_PAT>  (needs repo scope or actions:write)
+  repository_dispatch:
+    types: [xray-report]
+
+  # Scheduled run — every Monday at 8am UTC
+  # Uncomment and adjust when ready for automation
+  # schedule:
+  #   - cron: '0 8 * * 1'
+
+jobs:
+  generate-and-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Generate report
+        id: generate
+        env:
+          RELEASE_VERSION:     ${{ github.event.inputs.release_version || github.event.client_payload.release_version || 'r14' }}
+          USE_SAMPLE_DATA:     ${{ github.event.inputs.use_sample_data || github.event.client_payload.use_sample_data || 'false' }}
+          XRAY_API_BASE_URL:   ${{ secrets.XRAY_API_BASE_URL }}
+          XRAY_CLIENT_ID:      ${{ secrets.XRAY_CLIENT_ID }}
+          XRAY_CLIENT_SECRET:  ${{ secrets.XRAY_CLIENT_SECRET }}
+          JIRA_BASE_URL:              ${{ secrets.JIRA_BASE_URL }}
+          JIRA_AUTH_TOKEN:            ${{ secrets.JIRA_AUTH_TOKEN }}
+          CREATE_CONFLUENCE_PAGE:     ${{ github.event.inputs.create_confluence_page || github.event.client_payload.create_confluence_page || 'false' }}
+          CONFLUENCE_SPACE_KEY:       ${{ github.event.inputs.confluence_space_key || github.event.client_payload.confluence_space_key || secrets.CONFLUENCE_SPACE_KEY }}
+          CONFLUENCE_PARENT_PAGE_ID:  ${{ github.event.inputs.confluence_parent_page_id || github.event.client_payload.confluence_parent_page_id || secrets.CONFLUENCE_PARENT_PAGE_ID }}
+          JIRA_PROJECT:               ${{ github.event.inputs.jira_project || github.event.client_payload.jira_project || 'CHCCRM01' }}
+          OUTPUT_FILE:                output/report.html
+        run: |
+          mkdir -p output
+          npm start
+          echo "report_file=$(ls -t output/report-*.html | head -1)" >> $GITHUB_OUTPUT
+
+      # - name: Resolve email recipients
+      #   id: recipients
+      #   run: |
+      #     OVERRIDE="${{ github.event.inputs.email_to || github.event.client_payload.email_to }}"
+      #     DEFAULT="${{ secrets.MAIL_TO }}"
+      #     FALLBACK="test@test.com"
+      #     echo "to=${OVERRIDE:-${DEFAULT:-$FALLBACK}}" >> $GITHUB_OUTPUT
+
+      # - name: Send report by email
+      #   uses: dawidd6/action-send-mail@v3
+      #   with:
+      #     server_address: smtp.gmail.com
+      #     server_port: 465
+      #     secure: true
+      #     username: ${{ secrets.GMAIL_USER }}
+      #     password: ${{ secrets.GMAIL_APP_PASSWORD }}
+      #     to: ${{ steps.recipients.outputs.to }}
+      #     from: ${{ secrets.GMAIL_USER }}
+      #     subject: "[XRAY] Evidence Report - ${{ github.event.inputs.release_version || 'r14' }} - Run #${{ github.run_number }}"
+      #     body: |
+      #       XRAY Evidence Report generated successfully.
+      #
+      #       Release: ${{ github.event.inputs.release_version || 'r14' }}
+      #       Workflow run: #${{ github.run_number }}
+      #       Triggered by: ${{ github.actor }}
+      #
+      #       Open the attached HTML file in any browser to view the full interactive dashboard.
+      #     attachments: ${{ steps.generate.outputs.report_file }}
+
+      # ---------------------------------------------------------------------------
+      # SALESFORCE CALLBACK — posts a summary record to a custom SF object.
+      # Requires a Connected App with OAuth 2.0 (client_credentials or jwt-bearer).
+      #
+      # GitHub Secrets needed:
+      #   SF_CLIENT_ID       — Connected App consumer key
+      #   SF_CLIENT_SECRET   — Connected App consumer secret
+      #   SF_INSTANCE_URL    — e.g. https://yourorg.my.salesforce.com
+      #
+      # Salesforce setup:
+      #   1. Create Connected App → enable OAuth, add "client_credentials" flow
+      #   2. Create Custom Object: Xray_Report_Result__c
+      #      Fields: Release__c (Text), Status__c (Text), Run_Number__c (Text),
+      #              Triggered_By__c (Text), Summary__c (Long Text Area)
+      # ---------------------------------------------------------------------------
+      - name: Salesforce callback — report summary + upload HTML
+        if: steps.generate.conclusion == 'success' && (github.event.inputs.create_salesforce_object || github.event.client_payload.create_salesforce_object || 'false') == 'true'
+        env:
+          SF_CLIENT_ID:      ${{ secrets.SF_CLIENT_ID }}
+          SF_CLIENT_SECRET:  ${{ secrets.SF_CLIENT_SECRET }}
+          SF_INSTANCE_URL:   ${{ secrets.SF_INSTANCE_URL }}
+          RELEASE_VERSION:   ${{ github.event.inputs.release_version || github.event.client_payload.release_version || 'r14' }}
+          REPORT_FILE:       ${{ steps.generate.outputs.report_file }}
+          RECOMMENDATION:    ${{ steps.generate.outputs.recommendation }}
+        run: |
+          # 1. Authenticate — obtain access token via client_credentials
+          TOKEN_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/oauth2/token" \
+            -d "grant_type=client_credentials" \
+            -d "client_id=${SF_CLIENT_ID}" \
+            -d "client_secret=${SF_CLIENT_SECRET}")
+
+          echo "SF Auth response: ${TOKEN_RESPONSE}"
+          ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['access_token']) if 'access_token' in d else (print('ERROR:',d,file=sys.stderr) or exit(1))")
+
+          # 2. Create Evidence__c record — capture the new record ID
+          CREATE_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/Evidence__c/" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"Release__c\":      \"${RELEASE_VERSION}\",
+              \"Status__c\":       \"${{ job.status }}\",
+              \"Run_Number__c\":   \"${{ github.run_number }}\",
+              \"Triggered_By__c\": \"${{ github.actor }}\",
+              \"Summary__c\":          \"XRAY Evidence Report generated. Release: ${RELEASE_VERSION}. Run: #${{ github.run_number }}. Status: ${{ job.status }}.\",
+              \"Recommendation__c\":  \"${RECOMMENDATION}\"
+            }")
+
+          echo "SF Create response: ${CREATE_RESPONSE}"
+          RECORD_ID=$(echo "${CREATE_RESPONSE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id']) if isinstance(d,dict) and 'id' in d else (print('ERROR creating record:',d,file=sys.stderr) or exit(1))")
+          echo "SF Evidence__c record created: ${RECORD_ID}"
+
+          # 3. Encode HTML report as base64 and upload as Salesforce File (ContentVersion)
+          # Base64 written to file first; Python reads it from disk — no large CLI args
+          FILE_NAME=$(basename "${REPORT_FILE}")
+          B64_FILE=$(mktemp)
+          CV_BODY=$(mktemp)
+          base64 -w 0 "${REPORT_FILE}" > "${B64_FILE}"
+          python3 -c "import json; b64=open('${B64_FILE}').read().strip(); json.dump({'Title':'XRAY Report - ${RELEASE_VERSION} - Run #${{ github.run_number }}','PathOnClient':'${FILE_NAME}','VersionData':b64},open('${CV_BODY}','w'))"
+
+          CV_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/ContentVersion/" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data @"${CV_BODY}")
+
+          CV_ID=$(echo "${CV_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          echo "ContentVersion created: ${CV_ID}"
+
+          # 4. Get ContentDocumentId from the ContentVersion just created
+          CDI_RESPONSE=$(curl -s -X GET "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/ContentVersion/${CV_ID}?fields=ContentDocumentId" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}")
+
+          CONTENT_DOC_ID=$(echo "${CDI_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['ContentDocumentId'])")
+          echo "ContentDocumentId: ${CONTENT_DOC_ID}"
+
+          # 5. Link the file to the Evidence__c record via ContentDocumentLink
+          curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/ContentDocumentLink/" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"ContentDocumentId\": \"${CONTENT_DOC_ID}\",
+              \"LinkedEntityId\":    \"${RECORD_ID}\",
+              \"ShareType\":         \"V\"
+            }"
+
+          echo "Report HTML linked to Evidence__c/${RECORD_ID} in Salesforce."
