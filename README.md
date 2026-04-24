@@ -359,6 +359,7 @@ Go to **Actions** tab in GitHub → select _XRAY Evidence Report_ → **Run work
 | `create_confluence_page` | No | `false` | Create a Confluence summary page |
 | `confluence_space_key` | No | *(from secret)* | Confluence space key (overrides secret) |
 | `confluence_parent_page_id` | No | *(from secret)* | Confluence parent page ID (overrides secret) |
+| `create_salesforce_object` | No | `false` | Create an Evidence__c record in Salesforce and upload the HTML report |
 
 ---
 
@@ -391,12 +392,13 @@ Content-Type: application/json
   "event_type": "xray-report",
   "client_payload": {
     "release_version": "r14",
-    "email_to": "german.iturralde@gmail.com",
+    "email_to": "test@test.com",
     "use_sample_data": "false",
     "jira_project": "CHCCRM01",
     "create_confluence_page": "false",
     "confluence_space_key": "DIGITALCOM",
-    "confluence_parent_page_id": "1435632353"
+    "confluence_parent_page_id": "1435632353",
+    "create_salesforce_object": "false"
   }
 }
 ```

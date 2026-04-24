@@ -40,6 +40,14 @@ on:
         description: 'Jira project key to filter (e.g. CHCCRM01). Defaults to CHCCRM01 if empty.'
         required: false
         default: ''
+      create_salesforce_object:
+        description: 'Create an Evidence__c record in Salesforce and upload the HTML report'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
   # External API trigger — called from Copado, Jira, or any platform via curl:
   #   POST https://api.github.com/repos/{owner}/{repo}/dispatches
@@ -99,7 +107,7 @@ jobs:
       #   run: |
       #     OVERRIDE="${{ github.event.inputs.email_to || github.event.client_payload.email_to }}"
       #     DEFAULT="${{ secrets.MAIL_TO }}"
-      #     FALLBACK="german.iturralde@gmail.com"
+      #     FALLBACK="test@test.com"
       #     echo "to=${OVERRIDE:-${DEFAULT:-$FALLBACK}}" >> $GITHUB_OUTPUT
 
       # - name: Send report by email
@@ -139,7 +147,7 @@ jobs:
       #              Triggered_By__c (Text), Summary__c (Long Text Area)
       # ---------------------------------------------------------------------------
       - name: Salesforce callback — report summary + upload HTML
-        if: steps.generate.conclusion == 'success'
+        if: steps.generate.conclusion == 'success' && (github.event.inputs.create_salesforce_object || github.event.client_payload.create_salesforce_object || 'false') == 'true'
         env:
           SF_CLIENT_ID:      ${{ secrets.SF_CLIENT_ID }}
           SF_CLIENT_SECRET:  ${{ secrets.SF_CLIENT_SECRET }}
