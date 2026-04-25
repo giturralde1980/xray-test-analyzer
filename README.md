@@ -1,3 +1,8 @@
+# opella-sf-sfcoe-playground
+This repository serves as a dedicated for experimenting with new features, testing code implementations, and exploring innovative ideas without affecting production codebases.
+
+---
+
 # Xray Evidence Analyzer
 
 Tool for analyzing test execution runs in **Xray Cloud** (Jira). It queries the Xray GraphQL API, identifies completed test runs (PASSED/FAILED) classified by evidence coverage, and generates a **self-contained interactive HTML report** with metrics, charts, and a paginated data table. Optionally creates a **Confluence page** with the summary and uploads the report to **Salesforce** as a linked file on an `Evidence__c` record.
