@@ -605,7 +605,9 @@ async function main(): Promise<void> {
     const status: string = (tr.status?.name || 'Unknown').toUpperCase();
     statusCounts[status] = (statusCounts[status] || 0) + 1;
 
-    const hasEvidence = Array.isArray(tr.evidence) && tr.evidence.length > 0;
+    const hasEvidence =
+      (Array.isArray(tr.evidence) && tr.evidence.length > 0) ||
+      (Array.isArray(tr.steps) && tr.steps.some((s: any) => Array.isArray(s.evidence) && s.evidence.length > 0));
 
     if (status === 'PASSED') {
       if (hasEvidence) breakdown.passedWithEvidence += 1;
@@ -692,7 +694,7 @@ async function main(): Promise<void> {
   console.log('Status counts:', statusCounts);
   console.log('Breakdown:', breakdown);
 
-  const recommendation = breakdown.passedWithoutEvidence > breakdown.passedWithEvidence ? 'NO' : 'SI';
+  const recommendation = (breakdown.passedWithoutEvidence > breakdown.passedWithEvidence || breakdown.toDo > 0) ? 'NO' : 'SI';
   console.log(`Recommendation: ${recommendation}`);
   if (process.env.GITHUB_OUTPUT) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `recommendation=${recommendation}\n`);
