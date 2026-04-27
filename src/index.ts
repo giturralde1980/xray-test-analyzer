@@ -245,9 +245,9 @@ function generateHtmlReport(data: ReportData): string {
         <div class="kpi-subtext">Ran in 0 min — likely not executed</div>
       </div>
       <div class="kpi-card" style="border-color:#f97316;background:linear-gradient(135deg,rgba(249,115,22,.07),rgba(249,115,22,.02))">
-        <div class="kpi-label" style="color:#c2410c">Suspicious — Over 8h</div>
+        <div class="kpi-label" style="color:#c2410c">Suspicious — Over 6h</div>
         <div class="kpi-value" style="color:#ea580c">${data.longDurationRuns}</div>
-        <div class="kpi-subtext">Duration &gt; 8h — possible data issue</div>
+        <div class="kpi-subtext">Duration &gt; 6h — possible data issue</div>
       </div>
     </div>
     ${data.emptyExecutions > 0 ? `
@@ -581,7 +581,10 @@ async function main(): Promise<void> {
   console.log(`Total test runs across all executions: ${totalTestRuns}`);
   console.log(`Empty executions (no test runs assigned): ${emptyExecutions}`);
 
-  const allTestRuns = executions.results.flatMap(exec => exec.testRuns?.results || []);
+  const allTestRunsWithKey = executions.results.flatMap(exec => {
+    const executionKey = `${exec.projectId ?? 'unknown'}:${exec.issueId ?? 'unknown'}`;
+    return (exec.testRuns?.results || []).map((tr: any) => ({ tr, executionKey }));
+  });
   const statusCounts: Record<string, number> = {};
   const breakdown = {
     passedWithEvidence: 0,
@@ -600,8 +603,10 @@ async function main(): Promise<void> {
   let maxDuration = 0;
   let zeroDurationRuns = 0;
   let longDurationRuns = 0;
+  const zeroDurationRowsRaw: Array<{ execution: string; testRunId: string; status?: string; startedOn?: string; finishedOn?: string; duration: number }> = [];
+  const longDurationRowsRaw: Array<{ execution: string; testRunId: string; status?: string; startedOn?: string; finishedOn?: string; duration: number }> = [];
 
-  allTestRuns.forEach((tr: any) => {
+  allTestRunsWithKey.forEach(({ tr, executionKey }) => {
     const status: string = (tr.status?.name || 'Unknown').toUpperCase();
     statusCounts[status] = (statusCounts[status] || 0) + 1;
 
@@ -635,8 +640,14 @@ async function main(): Promise<void> {
         durationCount += 1;
         minDuration = Math.min(minDuration, diff);
         maxDuration = Math.max(maxDuration, diff);
-        if (diff === 0) zeroDurationRuns += 1;
-        if (diff > 480) longDurationRuns += 1;
+        if (diff === 0) {
+          zeroDurationRuns += 1;
+          zeroDurationRowsRaw.push({ execution: executionKey, testRunId: String(tr.id ?? 'unknown'), status: tr.status?.name, startedOn: tr.startedOn, finishedOn: tr.finishedOn, duration: 0 });
+        }
+        if (diff > 360) {
+          longDurationRuns += 1;
+          longDurationRowsRaw.push({ execution: executionKey, testRunId: String(tr.id ?? 'unknown'), status: tr.status?.name, startedOn: tr.startedOn, finishedOn: tr.finishedOn, duration: Math.round(diff) });
+        }
       }
     }
 
@@ -652,10 +663,12 @@ async function main(): Promise<void> {
   const noEvidenceRows = findNoEvidenceTestRunsInExecutions(executions.results);
   const withEvidenceRows = findWithEvidenceTestRunsInExecutions(executions.results);
 
-  // Combine both sets for a single Jira batch lookup
+  // Combine all sets for a single Jira batch lookup
   const allExecutionKeys = [
     ...noEvidenceRows.filter((r) => (r.status || '').toUpperCase() === 'PASSED').map((r) => r.execution),
-    ...withEvidenceRows.map((r) => r.execution)
+    ...withEvidenceRows.map((r) => r.execution),
+    ...zeroDurationRowsRaw.map((r) => r.execution),
+    ...longDurationRowsRaw.map((r) => r.execution)
   ];
   const jiraInfoMap = await fetchJiraIssuesForExecutions(allExecutionKeys);
 
@@ -672,6 +685,8 @@ async function main(): Promise<void> {
 
   const noEvidenceRowsEnriched = noEvidenceRows.map(enrichRow);
   const withEvidenceRowsEnriched = withEvidenceRows.map(enrichRow);
+  const zeroDurationRowsEnriched = zeroDurationRowsRaw.map(enrichRow);
+  const longDurationRowsEnriched = longDurationRowsRaw.map(enrichRow);
 
   const executorPerformance = Object.entries(executorMap)
     .map(([name, stats]) => ({
@@ -752,6 +767,9 @@ async function main(): Promise<void> {
       passedWithoutEvidence: breakdown.passedWithoutEvidence,
       statusCounts,
       noEvidenceRows: noEvidenceRowsEnriched,
+      zeroDurationRows: zeroDurationRowsEnriched,
+      longDurationRows: longDurationRowsEnriched,
+      emptyExecutions,
       timestamp: new Date().toLocaleString('en-US', { hour12: false }),
       htmlContent,
       htmlFilename: path.basename(outputFile)
