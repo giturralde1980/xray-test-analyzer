@@ -21,6 +21,9 @@ interface ConfluencePageData {
   passedWithoutEvidence: number;
   statusCounts: Record<string, number>;
   noEvidenceRows: Array<{ jiraKey: string; jiraSummary: string; jiraPriority: string; status: string }>;
+  zeroDurationRows: Array<{ jiraKey: string; jiraSummary: string; jiraPriority: string; status?: string; duration: number }>;
+  longDurationRows: Array<{ jiraKey: string; jiraSummary: string; jiraPriority: string; status?: string; duration: number }>;
+  emptyExecutions: number;
   timestamp: string;
   htmlContent?: string;
   htmlFilename?: string;
@@ -166,7 +169,7 @@ function buildStorageFormat(data: ConfluencePageData, passRate: string, evidence
       <ac:structured-macro ac:name="panel">
         <ac:parameter ac:name="borderColor">#0369a1</ac:parameter>
         <ac:parameter ac:name="titleBGColor">#eff6ff</ac:parameter>
-        <ac:parameter ac:name="title">Evidence Coverage (Passed)</ac:parameter>
+        <ac:parameter ac:name="title">Evidence Coverage</ac:parameter>
         <ac:rich-text-body>
           <p style="font-size:2em;font-weight:bold;color:#0369a1;text-align:center;margin:0.4em 0">${evidenceRate}%</p>
           <p style="text-align:center;color:#64748b">${data.passedWithEvidence} of ${data.passedWithEvidence + data.passedWithoutEvidence} with proof</p>
@@ -279,26 +282,83 @@ function buildStorageFormat(data: ConfluencePageData, passRate: string, evidence
       <td>Ran in 0 min &mdash; likely not executed</td>
     </tr>
     <tr>
-      <td>Suspicious &mdash; Over 8h</td>
+      <td>Suspicious &mdash; Over 6h</td>
       <td><ac:structured-macro ac:name="status"><ac:parameter ac:name="colour">${longDurColor}</ac:parameter><ac:parameter ac:name="title">${data.longDurationRuns}</ac:parameter></ac:structured-macro></td>
-      <td>Duration &gt; 8h &mdash; possible data issue</td>
+      <td>Duration &gt; 6h &mdash; possible data issue</td>
     </tr>
   </tbody>
 </table>`;
 
-  // No evidence table
-  const passedNoEvidence = data.noEvidenceRows.filter(r => (r.status || '').toUpperCase() === 'PASSED');
-  const rowsToShow = passedNoEvidence.slice(0, 100);
+  // ── Expand: Zero Duration ────────────────────────────────────────────────────
+  const zeroDurExpand = `
+<ac:structured-macro ac:name="expand">
+  <ac:parameter ac:name="title">Zero Duration Test Runs (${data.zeroDurationRows.length})</ac:parameter>
+  <ac:rich-text-body>
+    ${data.zeroDurationRows.length === 0
+      ? `<p>No zero-duration test runs found.</p>`
+      : `<ac:structured-macro ac:name="warning">
+  <ac:rich-text-body><p>These runs completed in <strong>0 minutes</strong> — they may not have been actually executed.</p></ac:rich-text-body>
+</ac:structured-macro>
+<table>
+  <tbody>
+    <tr><th>Jira Key</th><th>Summary</th><th>Priority</th><th>Status</th><th>Duration</th></tr>
+    ${data.zeroDurationRows.slice(0, 100).map(r => `
+    <tr>
+      <td><a href="${config.jiraBaseUrl}/browse/${r.jiraKey}">${r.jiraKey}</a></td>
+      <td>${r.jiraSummary}</td>
+      <td>${r.jiraPriority}</td>
+      <td>${r.status || '—'}</td>
+      <td>0 min</td>
+    </tr>`).join('')}
+  </tbody>
+</table>${data.zeroDurationRows.length > 100 ? `<p><em>Showing first 100 of ${data.zeroDurationRows.length} records.</em></p>` : ''}`}
+  </ac:rich-text-body>
+</ac:structured-macro>`;
 
-  const noEvidenceSection = passedNoEvidence.length > 0
-    ? `<h2>Passed Without Evidence (${passedNoEvidence.length})</h2>
-<ac:structured-macro ac:name="note">
+  // ── Expand: Over 6h ─────────────────────────────────────────────────────────
+  const longDurExpand = `
+<ac:structured-macro ac:name="expand">
+  <ac:parameter ac:name="title">Over 6h Duration Test Runs (${data.longDurationRows.length})</ac:parameter>
+  <ac:rich-text-body>
+    ${data.longDurationRows.length === 0
+      ? `<p>No test runs with duration over 6 hours.</p>`
+      : `<ac:structured-macro ac:name="warning">
+  <ac:rich-text-body><p>These runs have a duration <strong>over 6 hours</strong> — possible data quality issue.</p></ac:rich-text-body>
+</ac:structured-macro>
+<table>
+  <tbody>
+    <tr><th>Jira Key</th><th>Summary</th><th>Priority</th><th>Status</th><th>Duration</th></tr>
+    ${data.longDurationRows.slice(0, 100).map(r => `
+    <tr>
+      <td><a href="${config.jiraBaseUrl}/browse/${r.jiraKey}">${r.jiraKey}</a></td>
+      <td>${r.jiraSummary}</td>
+      <td>${r.jiraPriority}</td>
+      <td>${r.status || '—'}</td>
+      <td>${r.duration} min (${(r.duration / 60).toFixed(1)}h)</td>
+    </tr>`).join('')}
+  </tbody>
+</table>${data.longDurationRows.length > 100 ? `<p><em>Showing first 100 of ${data.longDurationRows.length} records.</em></p>` : ''}`}
+  </ac:rich-text-body>
+</ac:structured-macro>`;
+
+  // ── Expand: Passed Without Evidence ─────────────────────────────────────────
+  const passedNoEvidence = data.noEvidenceRows.filter(r => (r.status || '').toUpperCase() === 'PASSED');
+  const noEvidenceSection = `
+<ac:structured-macro ac:name="expand">
+  <ac:parameter ac:name="title">Passed Without Evidence (${passedNoEvidence.length})</ac:parameter>
+  <ac:rich-text-body>
+    ${passedNoEvidence.length === 0
+      ? `<ac:structured-macro ac:name="info">
+  <ac:parameter ac:name="title">Full Evidence Coverage</ac:parameter>
+  <ac:rich-text-body><p>All passed test runs have evidence attached.</p></ac:rich-text-body>
+</ac:structured-macro>`
+      : `<ac:structured-macro ac:name="note">
   <ac:rich-text-body><p>These test runs are marked <strong>PASSED</strong> but have no evidence files attached.</p></ac:rich-text-body>
 </ac:structured-macro>
 <table>
   <tbody>
     <tr><th>Jira Key</th><th>Summary</th><th>Priority</th><th>Status</th></tr>
-    ${rowsToShow.map(r => `
+    ${passedNoEvidence.slice(0, 100).map(r => `
     <tr>
       <td><a href="${config.jiraBaseUrl}/browse/${r.jiraKey}">${r.jiraKey}</a></td>
       <td>${r.jiraSummary}</td>
@@ -306,11 +366,8 @@ function buildStorageFormat(data: ConfluencePageData, passRate: string, evidence
       <td><ac:structured-macro ac:name="status"><ac:parameter ac:name="colour">Green</ac:parameter><ac:parameter ac:name="title">PASSED</ac:parameter></ac:structured-macro></td>
     </tr>`).join('')}
   </tbody>
-</table>
-${passedNoEvidence.length > 100 ? `<p><em>Showing first 100 of ${passedNoEvidence.length} records.</em></p>` : ''}`
-    : `<ac:structured-macro ac:name="info">
-  <ac:parameter ac:name="title">Full Evidence Coverage</ac:parameter>
-  <ac:rich-text-body><p>All passed test runs have evidence attached.</p></ac:rich-text-body>
+</table>${passedNoEvidence.length > 100 ? `<p><em>Showing first 100 of ${passedNoEvidence.length} records.</em></p>` : ''}`}
+  </ac:rich-text-body>
 </ac:structured-macro>`;
 
   const reportLink = data.htmlFilename
@@ -319,14 +376,24 @@ ${passedNoEvidence.length > 100 ? `<p><em>Showing first 100 of ${passedNoEvidenc
 </ac:structured-macro>`
     : '';
 
+  const emptyExecutionsNote = data.emptyExecutions > 0
+    ? `<ac:structured-macro ac:name="info">
+  <ac:rich-text-body><p><strong>${data.emptyExecutions}</strong> empty execution${data.emptyExecutions > 1 ? 's' : ''} detected — no test runs assigned.</p></ac:rich-text-body>
+</ac:structured-macro>`
+    : '';
+
   return `<p><strong>Release:</strong> ${data.releaseVersion} &nbsp;&mdash;&nbsp; <strong>Generated:</strong> ${data.timestamp}</p>
 ${reportLink}
 ${kpiRow1}
 ${kpiRow2}
+${emptyExecutionsNote}
 ${alerts.join('\n')}
 <h2>Charts</h2>
 ${chartsSection}
 ${metricsTable}
+<h2>Detail Sections</h2>
+${zeroDurExpand}
+${longDurExpand}
 ${noEvidenceSection}`;
 }
 

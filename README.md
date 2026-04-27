@@ -48,7 +48,7 @@ The tool is **multi-project** — any Jira project within the organization can b
 | Executing | Test runs currently in EXECUTING status |
 | Avg Duration | Average execution time of test runs |
 | Suspicious — Zero Duration | Runs completed in 0 min (likely not executed) |
-| Suspicious — Over 8h | Runs with duration > 8h (possible data quality issue) |
+| Suspicious — Over 6h | Runs with duration > 6h (possible data quality issue) |
 
 ---
 
@@ -315,7 +315,7 @@ The report is a **self-contained HTML file** (no server required, opens directly
 | Failed | Count of failed runs (shown in green as 0 when no failures) |
 | Avg Duration | Average run duration in minutes and hours |
 | Suspicious — Zero Duration | Runs completed in 0 min (likely not actually executed) |
-| Suspicious — Over 8h | Runs with duration > 8 hours (possible data quality issue) |
+| Suspicious — Over 6h | Runs with duration > 6 hours (possible data quality issue) |
 
 ### Charts (Chart.js v3.9.1)
 
@@ -487,7 +487,7 @@ GraphQL client with automatic pagination (PAGE_SIZE = 100). Returns per test run
 Jira REST API v3 client. Enriches test run rows with Jira issue data (key, summary, priority) using bulk JQL queries batched at 100 IDs per call to minimize API usage.
 
 ### [src/confluenceClient.ts](src/confluenceClient.ts)
-Creates a Confluence page under the configured parent page. Only called when `CREATE_CONFLUENCE_PAGE=true`. Builds a summary table with KPIs and attaches the HTML report file. Authentication reuses `JIRA_AUTH_TOKEN` (same Atlassian account).
+Creates a Confluence page under the configured parent page. Only called when `CREATE_CONFLUENCE_PAGE=true`. Generates: KPI panels (pass rate, evidence coverage, failed, executing, pending), status donut chart, evidence bar chart, additional metrics table (avg duration, zero duration, over 6h), and three expand sections (zero duration runs, over 6h runs, passed without evidence). Empty executions note shown when applicable. Attaches SVG charts and the full HTML report. Authentication reuses `JIRA_AUTH_TOKEN` (same Atlassian account).
 
 ### [src/filters.ts](src/filters.ts)
 Filtering logic:
