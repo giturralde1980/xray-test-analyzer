@@ -228,10 +228,10 @@ XRAY_CLIENT_SECRET=your_client_secret_here
 # ─── JQL & Filters ───────────────────────────────────────────────────────────
 # JIRA_PROJECT_PLACEHOLDER is replaced at runtime with the value of JIRA_PROJECT.
 # XRAY_VERSION_PLACEHOLDER is replaced at runtime with the value of RELEASE_VERSION.
-XRAY_JQL=fixVersion = "XRAY_VERSION_PLACEHOLDER" AND labels = "UAT" AND project = "JIRA_PROJECT_PLACEHOLDER" AND type = "test execution" ORDER BY created DESC
+XRAY_JQL=labels = "XRAY_VERSION_PLACEHOLDER" AND project = "JIRA_PROJECT_PLACEHOLDER" AND type = "test execution" ORDER BY created DESC
 
 JIRA_PROJECT=CHCCRM01
-RELEASE_VERSION=r14.0.0
+RELEASE_VERSION=r14
 
 # ─── Jira REST API ───────────────────────────────────────────────────────────
 JIRA_BASE_URL=https://your-org.atlassian.net
@@ -358,7 +358,7 @@ Go to **Actions** tab in GitHub → select _XRAY Evidence Report_ → **Run work
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `release_version` | Yes | `r14.0.0` | Release version to analyze (e.g. `r13.0.0`, `r14.0.0`). Must match the exact `fixVersion` value in Jira. |
+| `release_version` | Yes | `r14` | Release label to analyze (e.g. `r13`, `r14`) |
 | `use_sample_data` | No | `false` | Use mock data instead of real API |
 | `jira_project` | No | `CHCCRM01` | Jira project key to filter |
 | `create_confluence_page` | No | `false` | Create a Confluence summary page |
@@ -384,7 +384,7 @@ Content-Type: application/json
 {
   "event_type": "xray-report",
   "client_payload": {
-    "release_version": "r14.0.0",
+    "release_version": "r14",
     "use_sample_data": "false"
   }
 }
@@ -396,7 +396,7 @@ Content-Type: application/json
 {
   "event_type": "xray-report",
   "client_payload": {
-    "release_version": "r14.0.0",
+    "release_version": "r14",
     "email_to": "test@test.com",
     "use_sample_data": "false",
     "jira_project": "CHCCRM01",
@@ -414,7 +414,7 @@ Content-Type: application/json
 {
   "event_type": "xray-report",
   "client_payload": {
-    "release_version": "r14.0.0",
+    "release_version": "r14",
     "use_sample_data": "false",
     "jira_project": "CHCCRM01",
     "create_confluence_page": "true",
@@ -436,7 +436,7 @@ Manual input (workflow_dispatch) → client_payload → GitHub Secret → code d
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `RELEASE_VERSION` | Yes | — | Release version (e.g. `r14.0.0`). Must match the exact `fixVersion` value in Jira. Replaces `XRAY_VERSION_PLACEHOLDER` in the JQL. |
+| `RELEASE_VERSION` | Yes | — | Release label (e.g. `r14`). Replaces `XRAY_VERSION_PLACEHOLDER` in the JQL. |
 | `JIRA_PROJECT` | No | `CHCCRM01` | Jira project key. Replaces `JIRA_PROJECT_PLACEHOLDER` in the JQL. |
 | `XRAY_API_BASE_URL` | No | `https://xray.cloud.getxray.app/api/v2` | Xray Cloud API base URL |
 | `XRAY_CLIENT_ID` | Yes | — | 32-char hex Client ID from Xray Cloud API Keys |
@@ -515,7 +515,7 @@ A mock execution is returned with 1 PASSED test run and no evidence attached, al
 
 ```
 output/
-└── report-r14.0.0-2026-04-23T10-30-00.html
+└── report-r14-2026-04-23T10-30-00.html
 ```
 
 | Property | Detail |

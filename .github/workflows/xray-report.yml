@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release version (e.g. r14.0.0, r15.0.0). Must match the exact fixVersion value in Jira.'
+        description: 'Release version (e.g. r14, r15)'
         required: true
-        default: 'r14.0.0'
+        default: 'r14'
       email_to:
         description: 'Recipients (comma-separated, overrides default)'
         required: false
