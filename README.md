@@ -524,3 +524,78 @@ output/
 | Size | ~40–60 KB (Chart.js loaded from CDN, styles and data embedded) |
 | Self-contained | Opens in any browser with no server required |
 | Interactive | Two-tab table, pagination, evidence file modal, chart legends |
+
+---
+
+## Pending Improvements
+
+Items identified during development that require a business or technical decision before implementation. Documented here for the team taking over the project.
+
+---
+
+### 1. Test Execution Filtering Strategy: `labels` vs `fixVersion`
+
+**Current state:** Test executions are retrieved using a `labels`-based JQL query (e.g. `labels = "r15"`). This works, but labels are free-text fields — any team member can add or omit them inconsistently.
+
+**The problem:** Jira also has a structured `fixVersion` field (e.g. `r15.0.0`) that is more reliable and links directly to the release. However, not all past releases used `fixVersion` consistently (e.g. r14 did not use it), which makes a simple switch risky.
+
+**What needs to be decided:**
+- Going forward, will all test executions be tagged with `fixVersion`? If yes, what is the exact format? (e.g. `r15.0.0`, `r15.1.0`)
+- Should the filter combine both fields? e.g. `fixVersion = "r15.0.0" AND labels = "UAT"`
+- Is the `UAT` label required to exclude SIT executions, or is there another way to differentiate them?
+
+**Impact:** Once the team defines the convention, the change in code is minimal (two lines in `src/config.ts` and `RELEASE_VERSION` format in `.env`). The important thing is that the convention is documented and followed consistently from that release forward.
+
+---
+
+### 2. "Not Applicable" Test Status
+
+**Current state:** Xray has a status called `NOT_APPLICABLE` (or similar) for tests that do not apply to a given release or country. Currently this status is not handled explicitly — testers sometimes mark these tests as PASSED without attaching evidence, since the test simply does not apply.
+
+**The problem:** These runs pollute the _Passed Without Evidence_ metrics, making the evidence coverage look worse than it actually is and generating noise in the report.
+
+**What needs to be decided:**
+- Should `NOT_APPLICABLE` runs be excluded entirely from the report?
+- Or displayed in a separate section/tab so they are visible but not counted as a quality issue?
+- Is the team going to enforce a proper `NOT_APPLICABLE` status in Xray, or will they keep using PASSED for these cases?
+
+**Impact:** Requires adding `NOT_APPLICABLE` (or equivalent) to the status handling in `src/index.ts` and updating the filter logic in `src/filters.ts`. Small change once the decision is made.
+
+---
+
+### 3. Country Field on Test Runs
+
+**Current state:** The report does not include a country dimension. All test executions and runs are treated the same regardless of geography.
+
+**The problem:** The organization tests across multiple countries, and some tests only apply to specific regions. Without a country field, it is impossible to filter or break down results by country in the report.
+
+**What needs to be decided:**
+- Is `country` a custom field in Xray or in the Jira issue?
+- What is the exact field name/ID in the Xray GraphQL schema or Jira REST API?
+- Should the report show a country breakdown chart or just a column in the table?
+
+**Impact:** Requires adding the country field to the GraphQL query in `src/xrayClient.ts` and to the Jira enrichment in `src/jiraClient.ts`, then surfacing it in the HTML report.
+
+---
+
+### 4. Test Criticality / Priority
+
+**Current state:** The report shows the Jira issue `priority` field (e.g. _Medium_, _High_) as a column in the data table. In practice, most issues are set to _Medium_ by default and the field is never updated, making it meaningless.
+
+**The problem:** Without a meaningful criticality signal, it is impossible to prioritize which passed-without-evidence runs are most urgent to fix.
+
+**What needs to be decided:**
+- Will the team define and maintain a proper priority or criticality field in Jira/Xray?
+- Is there a custom Xray field (e.g. test importance or risk level) that should be used instead of the standard Jira priority?
+- Should the report highlight or sort by criticality once it is meaningful?
+
+**Impact:** If a custom field is used, `src/jiraClient.ts` needs to include it in the fields list and the HTML report needs a new column or sort option.
+
+---
+
+### 5. Technical Debt
+
+| # | Item | Detail |
+|---|------|--------|
+| T1 | Confluence SVG re-upload | When updating an existing Confluence page, SVG chart attachments fail with HTTP 400 if a file with the same name already exists. The fix requires deleting or versioning the attachment before re-uploading. |
+| T2 | Missing `.env.sample` | The README installation guide references `cp .env.sample .env` but the file does not exist in the repository. A sanitized sample file should be added so new contributors can onboard without reading the full README. |
