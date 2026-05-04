@@ -4,10 +4,10 @@ on:
   # Manual trigger — most flexible, lets you pick release on demand
   workflow_dispatch:
     inputs:
-      release_version:
-        description: 'Release version (e.g. r14, r15)'
+      fix_version:
+        description: 'Fix version (e.g. R14.0.0, R15.0.0)'
         required: true
-        default: 'r14'
+        default: 'R14.0.0'
       email_to:
         description: 'Recipients (comma-separated, overrides default)'
         required: false
@@ -51,7 +51,7 @@ on:
 
   # External API trigger — called from Copado, Jira, or any platform via curl:
   #   POST https://api.github.com/repos/{owner}/{repo}/dispatches
-  #   Body: { "event_type": "xray-report", "client_payload": { "release_version": "r15", "email_to": "...", "use_sample_data": "false" } }
+  #   Body: { "event_type": "xray-report", "client_payload": { "fix_version": "R15.0.0", "email_to": "...", "use_sample_data": "false" } }
   #   Header: Authorization: Bearer <GITHUB_PAT>  (needs repo scope or actions:write)
   repository_dispatch:
     types: [xray-report]
@@ -85,7 +85,7 @@ jobs:
       - name: Generate report
         id: generate
         env:
-          RELEASE_VERSION:     ${{ github.event.inputs.release_version || github.event.client_payload.release_version || 'r14' }}
+          FIX_VERSION:         ${{ github.event.inputs.fix_version || github.event.client_payload.fix_version || 'R14.0.0' }}
           USE_SAMPLE_DATA:     ${{ github.event.inputs.use_sample_data || github.event.client_payload.use_sample_data || 'false' }}
           XRAY_API_BASE_URL:   ${{ secrets.XRAY_API_BASE_URL }}
           XRAY_CLIENT_ID:      ${{ secrets.XRAY_CLIENT_ID }}
@@ -120,11 +120,11 @@ jobs:
       #     password: ${{ secrets.GMAIL_APP_PASSWORD }}
       #     to: ${{ steps.recipients.outputs.to }}
       #     from: ${{ secrets.GMAIL_USER }}
-      #     subject: "[XRAY] Evidence Report - ${{ github.event.inputs.release_version || 'r14' }} - Run #${{ github.run_number }}"
+      #     subject: "[XRAY] Evidence Report - ${{ github.event.inputs.fix_version || 'R14.0.0' }} - Run #${{ github.run_number }}"
       #     body: |
       #       XRAY Evidence Report generated successfully.
       #
-      #       Release: ${{ github.event.inputs.release_version || 'r14' }}
+      #       Release: ${{ github.event.inputs.fix_version || 'R14.0.0' }}
       #       Workflow run: #${{ github.run_number }}
       #       Triggered by: ${{ github.actor }}
       #
@@ -152,7 +152,7 @@ jobs:
           SF_CLIENT_ID:      ${{ secrets.SF_CLIENT_ID }}
           SF_CLIENT_SECRET:  ${{ secrets.SF_CLIENT_SECRET }}
           SF_INSTANCE_URL:   ${{ secrets.SF_INSTANCE_URL }}
-          RELEASE_VERSION:   ${{ github.event.inputs.release_version || github.event.client_payload.release_version || 'r14' }}
+          FIX_VERSION:       ${{ github.event.inputs.fix_version || github.event.client_payload.fix_version || 'R14.0.0' }}
           REPORT_FILE:       ${{ steps.generate.outputs.report_file }}
           RECOMMENDATION:    ${{ steps.generate.outputs.recommendation }}
         run: |
@@ -170,11 +170,11 @@ jobs:
             -H "Authorization: Bearer ${ACCESS_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "{
-              \"Release__c\":      \"${RELEASE_VERSION}\",
+              \"Release__c\":      \"${FIX_VERSION}\",
               \"Status__c\":       \"${{ job.status }}\",
               \"Run_Number__c\":   \"${{ github.run_number }}\",
               \"Triggered_By__c\": \"${{ github.actor }}\",
-              \"Summary__c\":          \"XRAY Evidence Report generated. Release: ${RELEASE_VERSION}. Run: #${{ github.run_number }}. Status: ${{ job.status }}.\",
+              \"Summary__c\":          \"XRAY Evidence Report generated. Release: ${FIX_VERSION}. Run: #${{ github.run_number }}. Status: ${{ job.status }}.\",
               \"Recommendation__c\":  \"${RECOMMENDATION}\"
             }")
 
@@ -188,7 +188,7 @@ jobs:
           B64_FILE=$(mktemp)
           CV_BODY=$(mktemp)
           base64 -w 0 "${REPORT_FILE}" > "${B64_FILE}"
-          python3 -c "import json; b64=open('${B64_FILE}').read().strip(); json.dump({'Title':'XRAY Report - ${RELEASE_VERSION} - Run #${{ github.run_number }}','PathOnClient':'${FILE_NAME}','VersionData':b64},open('${CV_BODY}','w'))"
+          python3 -c "import json; b64=open('${B64_FILE}').read().strip(); json.dump({'Title':'XRAY Report - ${FIX_VERSION} - Run #${{ github.run_number }}','PathOnClient':'${FILE_NAME}','VersionData':b64},open('${CV_BODY}','w'))"
 
           CV_RESPONSE=$(curl -s -X POST "${SF_INSTANCE_URL}/services/data/v59.0/sobjects/ContentVersion/" \
             -H "Authorization: Bearer ${ACCESS_TOKEN}" \

@@ -7,7 +7,7 @@ export interface ConfluencePageResult {
 }
 
 interface ConfluencePageData {
-  releaseVersion: string;
+  fixVersion: string;
   totalExecutions: number;
   totalTestRuns: number;
   passedCount: number;
@@ -382,7 +382,7 @@ function buildStorageFormat(data: ConfluencePageData, passRate: string, evidence
 </ac:structured-macro>`
     : '';
 
-  return `<p><strong>Release:</strong> ${data.releaseVersion} &nbsp;&mdash;&nbsp; <strong>Generated:</strong> ${data.timestamp}</p>
+  return `<p><strong>Release:</strong> ${data.fixVersion} &nbsp;&mdash;&nbsp; <strong>Generated:</strong> ${data.timestamp}</p>
 ${reportLink}
 ${kpiRow1}
 ${kpiRow2}
@@ -412,7 +412,7 @@ export async function createConfluencePage(data: ConfluencePageData): Promise<Co
   const evidenceRate = passedTotal ? ((data.passedWithEvidence / passedTotal) * 100).toFixed(1) : '0.0';
 
   const today = new Date().toISOString().slice(0, 10);
-  const title = `XRay Evidence - ${data.releaseVersion} - ${today}`;
+  const title = `XRay Evidence - ${data.fixVersion} - ${today}`;
   const storageBody = buildStorageFormat(data, passRate, evidenceRate);
 
   const headers = {

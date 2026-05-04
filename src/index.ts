@@ -32,7 +32,7 @@ interface ReportData {
   noEvidenceRows: Array<any>;
   withEvidenceRows: Array<any>;
   timestamp: string;
-  releaseVersion: string;
+  fixVersion: string;
 }
 
 function generateHtmlReport(data: ReportData): string {
@@ -108,7 +108,7 @@ function generateHtmlReport(data: ReportData): string {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light" />
-  <title>XRAY Test Analytics - ${data.releaseVersion}</title>
+  <title>XRAY Test Analytics - ${data.fixVersion}</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;color-scheme:light}
@@ -190,7 +190,7 @@ function generateHtmlReport(data: ReportData): string {
       <div class="header-content">
         <div>
           <h1>XRAY Test Analytics</h1>
-          <p class="header-subtitle">${data.releaseVersion} Regression Testing &mdash; Executive Intelligence Dashboard</p>
+          <p class="header-subtitle">${data.fixVersion} Regression Testing &mdash; Executive Intelligence Dashboard</p>
         </div>
         <div class="total-count">
           <div class="total-count-number">${data.totalExecutions}</div>
@@ -321,7 +321,7 @@ function generateHtmlReport(data: ReportData): string {
 
     <div class="footer">
       <div class="footer-left">
-        <p>${data.releaseVersion} &mdash; Regression Test Suite</p>
+        <p>${data.fixVersion} &mdash; Regression Test Suite</p>
         <p>Generated: ${data.timestamp}</p>
       </div>
       <div class="footer-right">
@@ -566,13 +566,13 @@ async function main(): Promise<void> {
   console.log('Xray auth token obtained successfully.');
 
   const jql = config.xrayJql
-    .replace('XRAY_VERSION_PLACEHOLDER', config.releaseVersion)
+    .replace('XRAY_VERSION_PLACEHOLDER', config.fixVersion)
     .replace('JIRA_PROJECT_PLACEHOLDER', config.jiraProject);
   const executions = await fetchTestExecutions({ authToken: token, jql, limit: 100 });
   console.log(`Fetched ${executions.total} test execution(s) from Xray.`);
 
   if (executions.total === 0) {
-    console.warn(`WARNING: No test executions found for project="${config.jiraProject}" release="${config.releaseVersion}". Verify the project key and release version are correct.`);
+    console.warn(`WARNING: No test executions found for project="${config.jiraProject}" release="${config.fixVersion}". Verify the project key and release version are correct.`);
     process.exit(1);
   }
 
@@ -719,7 +719,7 @@ async function main(): Promise<void> {
   console.log(`Passed without evidence: ${passedNoEvidenceRows.length}`);
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-  const outputFile = path.join('output', `report-${config.releaseVersion}-${timestamp}.html`);
+  const outputFile = path.join('output', `report-${config.fixVersion}-${timestamp}.html`);
 
   const outputDir = path.dirname(outputFile);
   if (!fs.existsSync(outputDir)) {
@@ -736,7 +736,7 @@ async function main(): Promise<void> {
     noEvidenceRows: noEvidenceRowsEnriched,
     withEvidenceRows: withEvidenceRowsEnriched,
     timestamp: new Date().toLocaleString('en-US', { hour12: false }),
-    releaseVersion: config.releaseVersion,
+    fixVersion: config.fixVersion,
     avgDuration,
     maxDuration: maxDurationValue,
     minDuration: minDurationValue,
@@ -753,7 +753,7 @@ async function main(): Promise<void> {
   const failedCount = statusCounts['FAILED'] || statusCounts['FAIL'] || 0;
   if (config.createConfluencePage) {
     const confluencePage = await createConfluencePage({
-      releaseVersion: config.releaseVersion,
+      fixVersion: config.fixVersion,
       totalExecutions: executions.total,
       totalTestRuns,
       passedCount,

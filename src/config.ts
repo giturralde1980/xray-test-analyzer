@@ -10,7 +10,7 @@ interface Config {
   xrayClientId: string;
   xrayClientSecret: string;
   xrayJql: string;
-  releaseVersion: string;
+  fixVersion: string;
   jiraProject: string;
   jiraBaseUrl: string;
   jiraAuthToken: string;
@@ -25,11 +25,10 @@ const config: Config = {
   xrayApiBaseUrl: process.env.XRAY_API_BASE_URL || 'https://xray.cloud.getxray.app/api/v2',
   xrayClientId: process.env.XRAY_CLIENT_ID || '',
   xrayClientSecret: process.env.XRAY_CLIENT_SECRET || '',
-  // xrayJql: process.env.XRAY_JQL || 'labels = "XRAY_VERSION_PLACEHOLDER" AND project = "JIRA_PROJECT_PLACEHOLDER" AND type = "test execution" AND summary ~ "UAT" ORDER BY created DESC',
-  xrayJql: process.env.XRAY_JQL || 'labels = "XRAY_VERSION_PLACEHOLDER" AND project = "JIRA_PROJECT_PLACEHOLDER" AND type = "test execution" ORDER BY created DESC',
-  releaseVersion: process.env.RELEASE_VERSION || 'r12',
-  jiraProject: process.env.JIRA_PROJECT || 'CHCCRM01',
-  jiraBaseUrl: process.env.JIRA_BASE_URL || 'https://opella-health.atlassian.net',
+  xrayJql: process.env.XRAY_JQL || 'fixVersion = "XRAY_VERSION_PLACEHOLDER" AND project = "JIRA_PROJECT_PLACEHOLDER" AND issuetype = "Test Execution" AND summary ~ "UAT" ORDER BY created DESC',
+  fixVersion: process.env.FIX_VERSION || '',
+  jiraProject: process.env.JIRA_PROJECT || '',
+  jiraBaseUrl: process.env.JIRA_BASE_URL || '',
   jiraAuthToken: process.env.JIRA_AUTH_TOKEN || '',
   confluenceSpaceKey: process.env.CONFLUENCE_SPACE_KEY || '',
   confluenceParentPageId: process.env.CONFLUENCE_PARENT_PAGE_ID || '',
