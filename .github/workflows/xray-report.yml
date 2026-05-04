@@ -48,10 +48,18 @@ on:
         options:
           - 'false'
           - 'true'
+      send_email:
+        description: 'Send report by email'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
   # External API trigger — called from Copado, Jira, or any platform via curl:
   #   POST https://api.github.com/repos/{owner}/{repo}/dispatches
-  #   Body: { "event_type": "xray-report", "client_payload": { "fix_version": "R15.0.0", "email_to": "...", "use_sample_data": "false" } }
+  #   Body: { "event_type": "xray-report", "client_payload": { "fix_version": "R15.0.0", "email_to": "...", "use_sample_data": "false", "send_email": "false" } }
   #   Header: Authorization: Bearer <GITHUB_PAT>  (needs repo scope or actions:write)
   repository_dispatch:
     types: [xray-report]
@@ -102,34 +110,36 @@ jobs:
           npm start
           echo "report_file=$(ls -t output/report-*.html | head -1)" >> $GITHUB_OUTPUT
 
-      # - name: Resolve email recipients
-      #   id: recipients
-      #   run: |
-      #     OVERRIDE="${{ github.event.inputs.email_to || github.event.client_payload.email_to }}"
-      #     DEFAULT="${{ secrets.MAIL_TO }}"
-      #     FALLBACK="test@test.com"
-      #     echo "to=${OVERRIDE:-${DEFAULT:-$FALLBACK}}" >> $GITHUB_OUTPUT
+      - name: Resolve email recipients
+        id: recipients
+        if: steps.generate.conclusion == 'success' && (github.event.inputs.send_email || github.event.client_payload.send_email || 'false') == 'true'
+        run: |
+          OVERRIDE="${{ github.event.inputs.email_to || github.event.client_payload.email_to }}"
+          DEFAULT="${{ secrets.MAIL_TO }}"
+          FALLBACK="test@test.com"
+          echo "to=${OVERRIDE:-${DEFAULT:-$FALLBACK}}" >> $GITHUB_OUTPUT
 
-      # - name: Send report by email
-      #   uses: dawidd6/action-send-mail@v3
-      #   with:
-      #     server_address: smtp.gmail.com
-      #     server_port: 465
-      #     secure: true
-      #     username: ${{ secrets.GMAIL_USER }}
-      #     password: ${{ secrets.GMAIL_APP_PASSWORD }}
-      #     to: ${{ steps.recipients.outputs.to }}
-      #     from: ${{ secrets.GMAIL_USER }}
-      #     subject: "[XRAY] Evidence Report - ${{ github.event.inputs.fix_version || 'R14.0.0' }} - Run #${{ github.run_number }}"
-      #     body: |
-      #       XRAY Evidence Report generated successfully.
-      #
-      #       Release: ${{ github.event.inputs.fix_version || 'R14.0.0' }}
-      #       Workflow run: #${{ github.run_number }}
-      #       Triggered by: ${{ github.actor }}
-      #
-      #       Open the attached HTML file in any browser to view the full interactive dashboard.
-      #     attachments: ${{ steps.generate.outputs.report_file }}
+      - name: Send report by email
+        if: steps.generate.conclusion == 'success' && (github.event.inputs.send_email || github.event.client_payload.send_email || 'false') == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.GMAIL_USER }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          to: ${{ steps.recipients.outputs.to }}
+          from: ${{ secrets.GMAIL_USER }}
+          subject: "[XRAY] Evidence Report - ${{ github.event.inputs.fix_version || github.event.client_payload.fix_version || 'R14.0.0' }} - Run #${{ github.run_number }}"
+          body: |
+            XRAY Evidence Report generated successfully.
+
+            Release: ${{ github.event.inputs.fix_version || github.event.client_payload.fix_version || 'R14.0.0' }}
+            Workflow run: #${{ github.run_number }}
+            Triggered by: ${{ github.actor }}
+
+            Open the attached HTML file in any browser to view the full interactive dashboard.
+          attachments: ${{ steps.generate.outputs.report_file }}
 
       # ---------------------------------------------------------------------------
       # SALESFORCE CALLBACK — posts a summary record to a custom SF object.
