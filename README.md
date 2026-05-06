@@ -1,7 +1,4 @@
-# opella-sf-sfcoe-playground
-This repository serves as a dedicated for experimenting with new features, testing code implementations, and exploring innovative ideas without affecting production codebases.
 
----
 
 # Xray Evidence Analyzer
 
