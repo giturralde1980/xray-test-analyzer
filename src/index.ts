@@ -4,7 +4,7 @@ import path from 'path';
 import config from './config';
 import { fetchTestExecutions } from './xrayClient';
 import { getXrayToken } from './xrayAuth';
-import { findNoEvidenceTestRunsInExecutions, findWithEvidenceTestRunsInExecutions } from './filters';
+import { findNoEvidenceTestRunsInExecutions, findWithEvidenceTestRunsInExecutions, findFailedTestRunsInExecutions } from './filters';
 import { fetchJiraIssuesForExecutions } from './jiraClient';
 import { createConfluencePage } from './confluenceClient';
 
@@ -19,6 +19,7 @@ interface ReportData {
     passedWithoutEvidence: number;
     failedWithEvidence: number;
     failedWithoutEvidence: number;
+    failedWithDefects: number;
     toDo: number;
     executing: number;
   };
@@ -31,6 +32,7 @@ interface ReportData {
   dateDistribution: Array<{ date: string; count: number }>;
   noEvidenceRows: Array<any>;
   withEvidenceRows: Array<any>;
+  failedRows: Array<any>;
   timestamp: string;
   fixVersion: string;
 }
@@ -94,13 +96,15 @@ function generateHtmlReport(data: ReportData): string {
             size: e.size || 0,
             createdOn: e.createdOn || null,
             fromStep: e.fromStep || false
-          }))
+          })),
+          defects: row.defects || []
         };
       })
   );
 
   const noEvidenceRowsJson = serializeRows(filteredRows);
   const withEvidenceRowsJson = serializeRows(data.withEvidenceRows);
+  const failedRowsJson = serializeRows(data.failedRows);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -168,6 +172,7 @@ function generateHtmlReport(data: ReportData): string {
     .footer{display:flex;justify-content:space-between;align-items:center;padding-top:2rem;border-top:1px solid rgba(0,0,0,.1);color:#475569 !important;font-size:.9rem;margin-top:3rem}
     .ev-btn{padding:.3rem .8rem;border-radius:8px;border:1px solid rgba(6,182,212,.5);background:rgba(6,182,212,.08);color:#0284c7;cursor:pointer;font-size:.8rem;font-weight:600;white-space:nowrap}
     .ev-btn:hover{background:rgba(6,182,212,.18)}
+    .comment-cell{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}
     #evModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center}
     #evModal.open{display:flex}
     #evModalBox{background:#fff;border-radius:16px;padding:2rem;max-width:640px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative}
@@ -226,7 +231,10 @@ function generateHtmlReport(data: ReportData): string {
       <div class="kpi-card failed">
         <div class="kpi-label">Failed</div>
         <div class="kpi-value">${failedCount}</div>
-        <div class="kpi-subtext">Require attention</div>
+        <div class="kpi-subtext" style="margin-top:.4rem">
+          <span style="color:${data.breakdown.failedWithDefects === 0 ? '#ef4444' : '#10b981'};font-weight:700">${data.breakdown.failedWithDefects}</span>
+          <span> defect${data.breakdown.failedWithDefects !== 1 ? 's' : ''} linked</span>
+        </div>
       </div>` : `
       <div class="kpi-card" style="border-color:rgba(16,185,129,.2);background:#f0fdf4 !important">
         <div class="kpi-label" style="color:#059669">Failed</div>
@@ -294,12 +302,15 @@ function generateHtmlReport(data: ReportData): string {
     </div>
 
     <div class="table-container">
-      <div style="display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid #e2e8f0">
+      <div style="display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid #e2e8f0;flex-wrap:wrap;align-items:flex-end">
         <button id="tabNoEvidence" onclick="switchTab('noEvidence')" style="padding:.75rem 1.5rem;border:none;background:none;cursor:pointer;font-size:.95rem;font-weight:600;color:#0284c7;border-bottom:3px solid #0284c7;margin-bottom:-2px;transition:all .2s">
-          ✗ Without Evidence &nbsp;<span style="background:#ef444422;color:#ef4444;border-radius:20px;padding:.1rem .6rem;font-size:.8rem">${data.breakdown.passedWithoutEvidence}</span>
+          Passed without Evidence &nbsp;<span style="background:#ef444422;color:#ef4444;border-radius:20px;padding:.1rem .6rem;font-size:.8rem">${data.breakdown.passedWithoutEvidence}</span>
         </button>
         <button id="tabWithEvidence" onclick="switchTab('withEvidence')" style="padding:.75rem 1.5rem;border:none;background:none;cursor:pointer;font-size:.95rem;font-weight:600;color:#94a3b8;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s">
-          ✓ With Evidence &nbsp;<span style="background:#10b98122;color:#10b981;border-radius:20px;padding:.1rem .6rem;font-size:.8rem">${data.breakdown.passedWithEvidence}</span>
+          Passed with Evidence &nbsp;<span style="background:#10b98122;color:#10b981;border-radius:20px;padding:.1rem .6rem;font-size:.8rem">${data.breakdown.passedWithEvidence}</span>
+        </button>
+        <button id="tabFailed" onclick="switchTab('failed')" style="padding:.75rem 1.5rem;border:none;background:none;cursor:pointer;font-size:.95rem;font-weight:600;color:#94a3b8;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s">
+          Failed &nbsp;<span style="background:#ef444422;color:#ef4444;border-radius:20px;padding:.1rem .6rem;font-size:.8rem">${data.breakdown.failedWithEvidence + data.breakdown.failedWithoutEvidence}</span>
         </button>
         <div style="flex:1;display:flex;justify-content:flex-end;align-items:center;padding-right:.25rem">
           <div id="paginatorTop" style="display:flex;align-items:center;gap:.75rem;font-size:.9rem;color:#94a3b8"></div>
@@ -439,20 +450,23 @@ function generateHtmlReport(data: ReportData): string {
     const JIRA_BASE_URL = '${config.jiraBaseUrl}';
     const datasets = {
       noEvidence:   ${noEvidenceRowsJson},
-      withEvidence: ${withEvidenceRowsJson}
+      withEvidence: ${withEvidenceRowsJson},
+      failed:       ${failedRowsJson}
     };
     const PAGE_SIZE = 20;
     let activeTab = 'noEvidence';
-    const pages = { noEvidence: 1, withEvidence: 1 };
+    const pages = { noEvidence: 1, withEvidence: 1, failed: 1 };
 
     function switchTab(tab) {
       activeTab = tab;
-      const isNo = tab === 'noEvidence';
-      document.getElementById('tabNoEvidence').style.color        = isNo ? '#0284c7' : '#94a3b8';
-      document.getElementById('tabNoEvidence').style.borderBottom = isNo ? '3px solid #0284c7' : '3px solid transparent';
-      document.getElementById('tabWithEvidence').style.color        = isNo ? '#94a3b8' : '#10b981';
-      document.getElementById('tabWithEvidence').style.borderBottom = isNo ? '3px solid transparent' : '3px solid #10b981';
-      document.getElementById('thEvidence').style.display = isNo ? 'none' : '';
+      const tabs = { noEvidence: 'tabNoEvidence', withEvidence: 'tabWithEvidence', failed: 'tabFailed' };
+      const colors = { noEvidence: '#0284c7', withEvidence: '#10b981', failed: '#ef4444' };
+      Object.keys(tabs).forEach(t => {
+        const el = document.getElementById(tabs[t]);
+        el.style.color = t === tab ? colors[t] : '#94a3b8';
+        el.style.borderBottom = t === tab ? \`3px solid \${colors[t]}\` : '3px solid transparent';
+      });
+      document.getElementById('thEvidence').style.display = tab === 'withEvidence' || tab === 'failed' ? '' : 'none';
       renderTable();
     }
 
@@ -461,14 +475,16 @@ function generateHtmlReport(data: ReportData): string {
       const page = pages[activeTab];
       const start = (page - 1) * PAGE_SIZE;
       const pageRows = rows.slice(start, start + PAGE_SIZE);
-      const isNoEvidence = activeTab === 'noEvidence';
-      const badgeStyle = isNoEvidence
+      const showEvidence = activeTab !== 'noEvidence';
+      const badgeStyle = activeTab === 'noEvidence'
         ? 'background:#10b98122;color:#10b981'
-        : 'background:#06b6d422;color:#0284c7';
+        : activeTab === 'withEvidence'
+          ? 'background:#06b6d422;color:#0284c7'
+          : 'background:#ef444422;color:#ef4444';
       document.getElementById('tableBody').innerHTML = pageRows.map((r, i) => {
-        const evBtn = (!isNoEvidence && r.evidenceFiles && r.evidenceFiles.length > 0)
-          ? \`<button class="ev-btn" onclick="openEvidenceModal(\${start + i})">&#128065; \${r.evidenceFiles.length} file\${r.evidenceFiles.length > 1 ? 's' : ''}</button>\`
-          : '';
+        const evBtn = (showEvidence && r.evidenceFiles && r.evidenceFiles.length > 0)
+          ? \`<button class="ev-btn" onclick="openEvidenceModal('\${activeTab}', \${start + i})">&#128065; \${r.evidenceFiles.length} file\${r.evidenceFiles.length > 1 ? 's' : ''}</button>\`
+          : (showEvidence ? '<span style="color:#94a3b8;font-size:.8rem">—</span>' : '');
         return \`
         <tr\${r.zeroDur ? ' class="zero-dur"' : ''}>
           <td><a href="\${JIRA_BASE_URL}/browse/\${r.jiraKey}" target="_blank" style="color:#0284c7;text-decoration:none;font-weight:500">\${r.jiraKey}</a></td>
@@ -478,8 +494,8 @@ function generateHtmlReport(data: ReportData): string {
           <td>\${r.finishedOn}</td>
           <td>\${r.duration}</td>
           <td>\${r.jiraPriority}</td>
-          <td>\${r.comment}</td>
-          \${!isNoEvidence ? \`<td>\${evBtn}</td>\` : ''}
+          <td class="comment-cell" title="\${r.comment !== '—' ? r.comment : ''}">\${r.comment}</td>
+          \${showEvidence ? \`<td>\${evBtn}</td>\` : ''}
         </tr>\`;
       }).join('');
       renderPaginator('paginatorTop');
@@ -530,8 +546,8 @@ function generateHtmlReport(data: ReportData): string {
       return (bytes / 1048576).toFixed(1) + ' MB';
     }
 
-    function openEvidenceModal(rowIdx) {
-      const row = datasets['withEvidence'][rowIdx];
+    function openEvidenceModal(tab, rowIdx) {
+      const row = datasets[tab][rowIdx];
       const files = row.evidenceFiles || [];
       document.getElementById('evModalTitle').textContent =
         (row.jiraKey !== '—' ? row.jiraKey + ' — ' : '') + row.jiraSummary;
@@ -591,6 +607,7 @@ async function main(): Promise<void> {
     passedWithoutEvidence: 0,
     failedWithEvidence: 0,
     failedWithoutEvidence: 0,
+    failedWithDefects: 0,
     toDo: 0,
     executing: 0
   };
@@ -620,6 +637,7 @@ async function main(): Promise<void> {
     } else if (['FAILED', 'FAIL', 'ERROR', 'BROKEN'].includes(status)) {
       if (hasEvidence) breakdown.failedWithEvidence += 1;
       else breakdown.failedWithoutEvidence += 1;
+      if (Array.isArray(tr.defects) && tr.defects.length > 0) breakdown.failedWithDefects += 1;
     } else if (status === 'TO DO' || status === 'TODO') {
       breakdown.toDo += 1;
     } else if (status === 'EXECUTING' || status === 'IN PROGRESS') {
@@ -662,11 +680,13 @@ async function main(): Promise<void> {
 
   const noEvidenceRows = findNoEvidenceTestRunsInExecutions(executions.results);
   const withEvidenceRows = findWithEvidenceTestRunsInExecutions(executions.results);
+  const failedRows = findFailedTestRunsInExecutions(executions.results);
 
   // Combine all sets for a single Jira batch lookup
   const allExecutionKeys = [
     ...noEvidenceRows.filter((r) => (r.status || '').toUpperCase() === 'PASSED').map((r) => r.execution),
     ...withEvidenceRows.map((r) => r.execution),
+    ...failedRows.map((r) => r.execution),
     ...zeroDurationRowsRaw.map((r) => r.execution),
     ...longDurationRowsRaw.map((r) => r.execution)
   ];
@@ -685,6 +705,7 @@ async function main(): Promise<void> {
 
   const noEvidenceRowsEnriched = noEvidenceRows.map(enrichRow);
   const withEvidenceRowsEnriched = withEvidenceRows.map(enrichRow);
+  const failedRowsEnriched = failedRows.map(enrichRow);
   const zeroDurationRowsEnriched = zeroDurationRowsRaw.map(enrichRow);
   const longDurationRowsEnriched = longDurationRowsRaw.map(enrichRow);
 
@@ -735,6 +756,7 @@ async function main(): Promise<void> {
     breakdown,
     noEvidenceRows: noEvidenceRowsEnriched,
     withEvidenceRows: withEvidenceRowsEnriched,
+    failedRows: failedRowsEnriched,
     timestamp: new Date().toLocaleString('en-US', { hour12: false }),
     fixVersion: config.fixVersion,
     avgDuration,

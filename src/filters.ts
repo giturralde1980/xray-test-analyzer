@@ -31,6 +31,7 @@ export interface TestRunNoEvidenceRow {
   executedById?: string;
   comment?: string;
   evidenceFiles?: EvidenceFile[];
+  defects?: string[];
 }
 
 function parseSegment(trace: Trace): TraceSegmentDoc | null {
@@ -89,7 +90,8 @@ function buildRow(executionKey: string, tr: any): TestRunNoEvidenceRow {
     finishedOn: tr.finishedOn,
     executedById: tr.executedById,
     comment: tr.comment,
-    evidenceFiles: [...runEvidence, ...stepEvidence]
+    evidenceFiles: [...runEvidence, ...stepEvidence],
+    defects: Array.isArray(tr.defects) ? tr.defects : []
   };
 }
 
@@ -127,6 +129,24 @@ export function findWithEvidenceTestRunsInExecutions(
       const status = (tr.status?.name ?? '').toUpperCase();
       if (status !== 'PASSED' && status !== 'PASS') return;
       if (checkEvidence(tr)) rows.push(buildRow(executionKey, tr));
+    });
+  });
+  return rows;
+}
+
+const FAILED_STATUSES = new Set(['FAILED', 'FAIL', 'ERROR', 'BROKEN']);
+
+export function findFailedTestRunsInExecutions(
+  executions: Array<any>
+): TestRunNoEvidenceRow[] {
+  if (!Array.isArray(executions)) return [];
+  const rows: TestRunNoEvidenceRow[] = [];
+  executions.forEach((exec) => {
+    const executionKey = `${exec.projectId ?? 'unknown'}:${exec.issueId ?? 'unknown'}`;
+    (exec.testRuns?.results ?? []).forEach((tr: any) => {
+      const status = (tr.status?.name ?? '').toUpperCase();
+      if (!FAILED_STATUSES.has(status)) return;
+      rows.push(buildRow(executionKey, tr));
     });
   });
   return rows;

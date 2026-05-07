@@ -62,6 +62,7 @@ async function fetchTestExecutionsPage(
             comment
             evidence { id filename size createdOn }
             steps { evidence { id filename size createdOn } }
+            defects
           }
         }
       }
