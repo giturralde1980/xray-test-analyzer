@@ -4,7 +4,7 @@ import path from 'path';
 import config from './config';
 import { fetchTestExecutions } from './xrayClient';
 import { getXrayToken } from './xrayAuth';
-import { findNoEvidenceTestRunsInExecutions, findWithEvidenceTestRunsInExecutions, findFailedTestRunsInExecutions } from './filters';
+import { findNoEvidenceTestRunsInExecutions, findWithEvidenceTestRunsInExecutions, findFailedTestRunsInExecutions, findPendingTestRunsInExecutions } from './filters';
 import { fetchJiraIssuesForExecutions } from './jiraClient';
 import { createConfluencePage } from './confluenceClient';
 
@@ -33,6 +33,7 @@ interface ReportData {
   noEvidenceRows: Array<any>;
   withEvidenceRows: Array<any>;
   failedRows: Array<any>;
+  pendingRows: Array<any>;
   timestamp: string;
   fixVersion: string;
 }
@@ -105,6 +106,7 @@ function generateHtmlReport(data: ReportData): string {
   const noEvidenceRowsJson = serializeRows(filteredRows);
   const withEvidenceRowsJson = serializeRows(data.withEvidenceRows);
   const failedRowsJson = serializeRows(data.failedRows);
+  const pendingRowsJson = serializeRows(data.pendingRows);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -312,6 +314,9 @@ function generateHtmlReport(data: ReportData): string {
         <button id="tabFailed" onclick="switchTab('failed')" style="padding:.75rem 1.5rem;border:none;background:none;cursor:pointer;font-size:.95rem;font-weight:600;color:#94a3b8;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s">
           Failed &nbsp;<span style="background:#ef444422;color:#ef4444;border-radius:20px;padding:.1rem .6rem;font-size:.8rem">${data.breakdown.failedWithEvidence + data.breakdown.failedWithoutEvidence}</span>
         </button>
+        <button id="tabPending" onclick="switchTab('pending')" style="padding:.75rem 1.5rem;border:none;background:none;cursor:pointer;font-size:.95rem;font-weight:600;color:#94a3b8;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s">
+          Pending &nbsp;<span style="background:#f59e0b22;color:#f59e0b;border-radius:20px;padding:.1rem .6rem;font-size:.8rem">${data.breakdown.toDo}</span>
+        </button>
         <div style="flex:1;display:flex;justify-content:flex-end;align-items:center;padding-right:.25rem">
           <div id="paginatorTop" style="display:flex;align-items:center;gap:.75rem;font-size:.9rem;color:#94a3b8"></div>
         </div>
@@ -320,7 +325,7 @@ function generateHtmlReport(data: ReportData): string {
         <thead>
           <tr>
             <th>Jira Key</th><th>Summary</th><th>Status</th>
-            <th>Started</th><th>Finished</th><th>Duration</th>
+            <th id="thStarted">Started</th><th id="thFinished">Finished</th><th id="thDuration">Duration</th>
             <th>Priority</th><th>Comment</th>
             <th id="thEvidence" style="display:none">Evidence</th>
           </tr>
@@ -451,22 +456,25 @@ function generateHtmlReport(data: ReportData): string {
     const datasets = {
       noEvidence:   ${noEvidenceRowsJson},
       withEvidence: ${withEvidenceRowsJson},
-      failed:       ${failedRowsJson}
+      failed:       ${failedRowsJson},
+      pending:      ${pendingRowsJson}
     };
     const PAGE_SIZE = 20;
     let activeTab = 'noEvidence';
-    const pages = { noEvidence: 1, withEvidence: 1, failed: 1 };
+    const pages = { noEvidence: 1, withEvidence: 1, failed: 1, pending: 1 };
 
     function switchTab(tab) {
       activeTab = tab;
-      const tabs = { noEvidence: 'tabNoEvidence', withEvidence: 'tabWithEvidence', failed: 'tabFailed' };
-      const colors = { noEvidence: '#0284c7', withEvidence: '#10b981', failed: '#ef4444' };
+      const tabs = { noEvidence: 'tabNoEvidence', withEvidence: 'tabWithEvidence', failed: 'tabFailed', pending: 'tabPending' };
+      const colors = { noEvidence: '#0284c7', withEvidence: '#10b981', failed: '#ef4444', pending: '#f59e0b' };
       Object.keys(tabs).forEach(t => {
         const el = document.getElementById(tabs[t]);
         el.style.color = t === tab ? colors[t] : '#94a3b8';
         el.style.borderBottom = t === tab ? \`3px solid \${colors[t]}\` : '3px solid transparent';
       });
       document.getElementById('thEvidence').style.display = tab === 'withEvidence' || tab === 'failed' ? '' : 'none';
+      const hideDates = tab === 'pending';
+      ['thStarted','thFinished','thDuration'].forEach(id => document.getElementById(id).style.display = hideDates ? 'none' : '');
       renderTable();
     }
 
@@ -480,7 +488,10 @@ function generateHtmlReport(data: ReportData): string {
         ? 'background:#10b98122;color:#10b981'
         : activeTab === 'withEvidence'
           ? 'background:#06b6d422;color:#0284c7'
-          : 'background:#ef444422;color:#ef4444';
+          : activeTab === 'failed'
+            ? 'background:#ef444422;color:#ef4444'
+            : 'background:#f59e0b22;color:#f59e0b;white-space:nowrap';
+      const isPending = activeTab === 'pending';
       document.getElementById('tableBody').innerHTML = pageRows.map((r, i) => {
         const evBtn = (showEvidence && r.evidenceFiles && r.evidenceFiles.length > 0)
           ? \`<button class="ev-btn" onclick="openEvidenceModal('\${activeTab}', \${start + i})">&#128065; \${r.evidenceFiles.length} file\${r.evidenceFiles.length > 1 ? 's' : ''}</button>\`
@@ -490,9 +501,7 @@ function generateHtmlReport(data: ReportData): string {
           <td><a href="\${JIRA_BASE_URL}/browse/\${r.jiraKey}" target="_blank" style="color:#0284c7;text-decoration:none;font-weight:500">\${r.jiraKey}</a></td>
           <td>\${r.jiraSummary}</td>
           <td><span class="badge" style="\${badgeStyle}">\${r.status}</span></td>
-          <td>\${r.startedOn}</td>
-          <td>\${r.finishedOn}</td>
-          <td>\${r.duration}</td>
+          \${isPending ? '' : \`<td>\${r.startedOn}</td><td>\${r.finishedOn}</td><td>\${r.duration}</td>\`}
           <td>\${r.jiraPriority}</td>
           <td class="comment-cell" title="\${r.comment !== '—' ? r.comment : ''}">\${r.comment}</td>
           \${showEvidence ? \`<td>\${evBtn}</td>\` : ''}
@@ -681,12 +690,14 @@ async function main(): Promise<void> {
   const noEvidenceRows = findNoEvidenceTestRunsInExecutions(executions.results);
   const withEvidenceRows = findWithEvidenceTestRunsInExecutions(executions.results);
   const failedRows = findFailedTestRunsInExecutions(executions.results);
+  const pendingRows = findPendingTestRunsInExecutions(executions.results);
 
   // Combine all sets for a single Jira batch lookup
   const allExecutionKeys = [
     ...noEvidenceRows.filter((r) => (r.status || '').toUpperCase() === 'PASSED').map((r) => r.execution),
     ...withEvidenceRows.map((r) => r.execution),
     ...failedRows.map((r) => r.execution),
+    ...pendingRows.map((r) => r.execution),
     ...zeroDurationRowsRaw.map((r) => r.execution),
     ...longDurationRowsRaw.map((r) => r.execution)
   ];
@@ -706,6 +717,7 @@ async function main(): Promise<void> {
   const noEvidenceRowsEnriched = noEvidenceRows.map(enrichRow);
   const withEvidenceRowsEnriched = withEvidenceRows.map(enrichRow);
   const failedRowsEnriched = failedRows.map(enrichRow);
+  const pendingRowsEnriched = pendingRows.map(enrichRow);
   const zeroDurationRowsEnriched = zeroDurationRowsRaw.map(enrichRow);
   const longDurationRowsEnriched = longDurationRowsRaw.map(enrichRow);
 
@@ -757,6 +769,7 @@ async function main(): Promise<void> {
     noEvidenceRows: noEvidenceRowsEnriched,
     withEvidenceRows: withEvidenceRowsEnriched,
     failedRows: failedRowsEnriched,
+    pendingRows: pendingRowsEnriched,
     timestamp: new Date().toLocaleString('en-US', { hour12: false }),
     fixVersion: config.fixVersion,
     avgDuration,

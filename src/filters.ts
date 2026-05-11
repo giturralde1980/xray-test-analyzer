@@ -151,3 +151,21 @@ export function findFailedTestRunsInExecutions(
   });
   return rows;
 }
+
+const PENDING_STATUSES = new Set(['TO DO', 'TODO']);
+
+export function findPendingTestRunsInExecutions(
+  executions: Array<any>
+): TestRunNoEvidenceRow[] {
+  if (!Array.isArray(executions)) return [];
+  const rows: TestRunNoEvidenceRow[] = [];
+  executions.forEach((exec) => {
+    const executionKey = `${exec.projectId ?? 'unknown'}:${exec.issueId ?? 'unknown'}`;
+    (exec.testRuns?.results ?? []).forEach((tr: any) => {
+      const status = (tr.status?.name ?? '').toUpperCase();
+      if (!PENDING_STATUSES.has(status)) return;
+      rows.push(buildRow(executionKey, tr));
+    });
+  });
+  return rows;
+}
