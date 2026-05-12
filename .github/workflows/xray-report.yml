@@ -8,8 +8,8 @@ on:
         description: 'Fix version (e.g. R14.0.0, R15.0.0)'
         required: true
         default: 'R14.0.0'
-      email_to:
-        description: 'Recipients (comma-separated, overrides default)'
+      jira_project:
+        description: 'Jira project key to filter (e.g. CHCCRM01). Defaults to CHCCRM01 if empty.'
         required: false
         default: ''
       use_sample_data:
@@ -36,10 +36,6 @@ on:
         description: 'Confluence parent page ID (overrides secret CONFLUENCE_PARENT_PAGE_ID)'
         required: false
         default: ''
-      jira_project:
-        description: 'Jira project key to filter (e.g. CHCCRM01). Defaults to CHCCRM01 if empty.'
-        required: false
-        default: ''
       create_salesforce_object:
         description: 'Create an Evidence__c record in Salesforce and upload the HTML report'
         required: false
@@ -56,6 +52,10 @@ on:
         options:
           - 'false'
           - 'true'
+      email_to:
+        description: 'Recipients (comma-separated, overrides default)'
+        required: false
+        default: ''
 
   # External API trigger — called from Copado, Jira, or any platform via curl:
   #   POST https://api.github.com/repos/{owner}/{repo}/dispatches

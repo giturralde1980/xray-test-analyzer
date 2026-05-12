@@ -5,7 +5,7 @@ import config from './config';
 import { fetchTestExecutions } from './xrayClient';
 import { getXrayToken } from './xrayAuth';
 import { findNoEvidenceTestRunsInExecutions, findWithEvidenceTestRunsInExecutions, findFailedTestRunsInExecutions, findPendingTestRunsInExecutions } from './filters';
-import { fetchJiraIssuesForExecutions } from './jiraClient';
+import { fetchJiraIssuesForExecutions, fetchJiraIssuesByIds } from './jiraClient';
 import { createConfluencePage } from './confluenceClient';
 
 interface ReportData {
@@ -328,6 +328,7 @@ function generateHtmlReport(data: ReportData): string {
             <th id="thStarted">Started</th><th id="thFinished">Finished</th><th id="thDuration">Duration</th>
             <th>Priority</th><th>Comment</th>
             <th id="thEvidence" style="display:none">Evidence</th>
+            <th id="thDefects" style="display:none">Defects</th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -473,6 +474,7 @@ function generateHtmlReport(data: ReportData): string {
         el.style.borderBottom = t === tab ? \`3px solid \${colors[t]}\` : '3px solid transparent';
       });
       document.getElementById('thEvidence').style.display = tab === 'withEvidence' || tab === 'failed' ? '' : 'none';
+      document.getElementById('thDefects').style.display = tab === 'failed' ? '' : 'none';
       const hideDates = tab === 'pending';
       ['thStarted','thFinished','thDuration'].forEach(id => document.getElementById(id).style.display = hideDates ? 'none' : '');
       renderTable();
@@ -484,6 +486,7 @@ function generateHtmlReport(data: ReportData): string {
       const start = (page - 1) * PAGE_SIZE;
       const pageRows = rows.slice(start, start + PAGE_SIZE);
       const showEvidence = activeTab !== 'noEvidence';
+      const showDefects = activeTab === 'failed';
       const badgeStyle = activeTab === 'noEvidence'
         ? 'background:#10b98122;color:#10b981'
         : activeTab === 'withEvidence'
@@ -496,6 +499,11 @@ function generateHtmlReport(data: ReportData): string {
         const evBtn = (showEvidence && r.evidenceFiles && r.evidenceFiles.length > 0)
           ? \`<button class="ev-btn" onclick="openEvidenceModal('\${activeTab}', \${start + i})">&#128065; \${r.evidenceFiles.length} file\${r.evidenceFiles.length > 1 ? 's' : ''}</button>\`
           : (showEvidence ? '<span style="color:#94a3b8;font-size:.8rem">—</span>' : '');
+        const defectsCell = showDefects
+          ? (r.defects && r.defects.length > 0
+              ? r.defects.map((d) => \`<a href="\${JIRA_BASE_URL}/browse/\${d}" target="_blank" style="display:inline-block;margin:1px 2px;padding:.2rem .6rem;border-radius:12px;background:#fee2e2;color:#b91c1c;font-size:.78rem;font-weight:600;text-decoration:none;border:1px solid #fca5a5">\${d}</a>\`).join('')
+              : '<span style="color:#94a3b8;font-size:.8rem">—</span>')
+          : '';
         return \`
         <tr\${r.zeroDur ? ' class="zero-dur"' : ''}>
           <td><a href="\${JIRA_BASE_URL}/browse/\${r.jiraKey}" target="_blank" style="color:#0284c7;text-decoration:none;font-weight:500">\${r.jiraKey}</a></td>
@@ -505,6 +513,7 @@ function generateHtmlReport(data: ReportData): string {
           <td>\${r.jiraPriority}</td>
           <td class="comment-cell" title="\${r.comment !== '—' ? r.comment : ''}">\${r.comment}</td>
           \${showEvidence ? \`<td>\${evBtn}</td>\` : ''}
+          \${showDefects ? \`<td>\${defectsCell}</td>\` : ''}
         </tr>\`;
       }).join('');
       renderPaginator('paginatorTop');
@@ -716,8 +725,19 @@ async function main(): Promise<void> {
 
   const noEvidenceRowsEnriched = noEvidenceRows.map(enrichRow);
   const withEvidenceRowsEnriched = withEvidenceRows.map(enrichRow);
-  const failedRowsEnriched = failedRows.map(enrichRow);
   const pendingRowsEnriched = pendingRows.map(enrichRow);
+
+  // Resolve defect IDs (internal Xray/Jira numeric IDs) to Jira keys (e.g. CHCCRM01-123)
+  const allDefectIds = Array.from(new Set(failedRows.flatMap((r) => r.defects ?? [])));
+  const defectKeyMap = allDefectIds.length > 0
+    ? await fetchJiraIssuesByIds(allDefectIds, 'Defects')
+    : new Map();
+
+  const failedRowsEnriched = failedRows.map((row) => {
+    const base = enrichRow(row);
+    const resolvedDefects = (row.defects ?? []).map((id) => defectKeyMap.get(String(id))?.key ?? id);
+    return { ...base, defects: resolvedDefects };
+  });
   const zeroDurationRowsEnriched = zeroDurationRowsRaw.map(enrichRow);
   const longDurationRowsEnriched = longDurationRowsRaw.map(enrichRow);
 
