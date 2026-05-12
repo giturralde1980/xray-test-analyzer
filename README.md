@@ -41,6 +41,7 @@ The tool is **multi-project** — any Jira project within the organization can b
 | Evidence Coverage | % of PASSED test runs that have evidence attached |
 | Passed without evidence | Approved tests with no proof attached (critical case) |
 | Failed without evidence | Failed tests with no proof attached |
+| Failed with linked defects | Failed runs that have a Jira bug linked as defect |
 | Pending | Test runs in TO DO status |
 | Executing | Test runs currently in EXECUTING status |
 | Avg Duration | Average execution time of test runs |
@@ -96,18 +97,26 @@ The tool is **multi-project** — any Jira project within the organization can b
               └────────┬──────────────────────────────────────┘
                        │
               ┌────────▼──────────────────────────────────────┐
-              │  Jira REST API enrichment                     │
+              │  Jira REST API enrichment (execution issues)  │
               │  Bulk JQL fetch — all execution issue IDs     │
               │  → key, summary, priority per issue           │
+              └────────┬──────────────────────────────────────┘
+                       │
+              ┌────────▼──────────────────────────────────────┐
+              │  Jira REST API enrichment (defect keys)       │
+              │  Collect unique defect IDs from failed runs   │
+              │  Bulk JQL fetch → resolve IDs to PROJ-XXX     │
               └────────┬──────────────────────────────────────┘
                        │
               ┌────────▼──────────────────────────────────────┐
               │  generateHtmlReport()                         │
               │  - KPI cards (2 rows × 4)                     │
               │  - Charts (Chart.js v3.9.1)                   │
-              │  - Two-tab paginated table                    │
-              │    · Without Evidence (PASSED, no proof)      │
-              │    · With Evidence (evidence files viewer)    │
+              │  - Four-tab paginated table                   │
+              │    · Passed without Evidence                  │
+              │    · Passed with Evidence (file viewer)       │
+              │    · Failed (evidence + linked defects)       │
+              │    · Pending (TO DO runs)                     │
               └────────┬──────────────────────────────────────┘
                        │
               ┌────────▼──────────────────────────────────────────────┐
@@ -135,19 +144,20 @@ The tool is **multi-project** — any Jira project within the organization can b
 
 The tool is designed to minimize external API calls. All data is fetched in bulk at startup — the generated HTML report is fully self-contained and requires **zero additional API calls** once rendered in the browser.
 
-### Real example — Release `r13`
+### Real example — Release `r15`
 
 | # | Service | Method | Endpoint | Purpose | Result |
 |---|---------|--------|----------|---------|--------|
 | 1 | Xray | `POST` | `/api/v2/authenticate` | Obtain Bearer token | Token (441 chars) |
-| 2 | Xray | `POST` | `/api/v2/graphql` | Fetch executions — page 1 | 100 of 295 executions |
-| 3 | Xray | `POST` | `/api/v2/graphql` | Fetch executions — page 2 | 100 of 295 executions |
-| 4 | Xray | `POST` | `/api/v2/graphql` | Fetch executions — page 3 | 95 of 295 executions |
-| 5 | Jira | `POST` | `/rest/api/3/search/jql` | Enrich issues — batch 1 | 100 of 233 issues |
-| 6 | Jira | `POST` | `/rest/api/3/search/jql` | Enrich issues — batch 2 | 100 of 233 issues |
-| 7 | Jira | `POST` | `/rest/api/3/search/jql` | Enrich issues — batch 3 | 33 of 233 issues |
+| 2 | Xray | `POST` | `/api/v2/graphql` | Fetch executions — page 1 | 100 of 147 executions |
+| 3 | Xray | `POST` | `/api/v2/graphql` | Fetch executions — page 2 | 47 of 147 executions |
+| 4 | Jira | `POST` | `/rest/api/3/search/jql` | Enrich execution issues — batch 1 | 100 of 141 issues |
+| 5 | Jira | `POST` | `/rest/api/3/search/jql` | Enrich execution issues — batch 2 | 41 of 141 issues |
+| 6 | Jira | `POST` | `/rest/api/3/search/jql` | Resolve defect keys (failed runs) | 1 defect resolved |
 
-**Total: 7 API calls** to generate a complete report for 295 executions and 275 test runs.
+**Total: 6 API calls** to generate a complete report for 147 executions and 141 test runs.
+
+> The defect resolution call (step 6) only fires when there are failed runs with linked defects. It is skipped entirely when there are no defects to resolve.
 
 ### How the optimization works
 
@@ -322,17 +332,20 @@ The report is a **self-contained HTML file** (no server required, opens directly
 | Evidence Coverage | Horizontal bar | Passed with vs. without evidence |
 | Execution Timeline | Line | Number of test runs executed per date |
 
-### Two-Tab Data Table
+### Four-Tab Data Table
 
 | Tab | Contents |
 |-----|----------|
-| Without Evidence | PASSED test runs with no evidence attached — the critical case |
-| With Evidence | PASSED test runs with evidence files — includes file viewer modal |
+| Passed without Evidence | PASSED runs with no evidence attached — the critical quality issue |
+| Passed with Evidence | PASSED runs with evidence files — includes file viewer modal |
+| Failed | Failed runs — shows evidence files and linked defect keys |
+| Pending | Runs in TO DO status — date/duration columns hidden |
 
 - 20 rows per page with navigation controls
-- Columns: Jira Key (linked), Summary, Status, Started, Finished, Duration, Priority, Comment
+- Base columns: Jira Key (linked), Summary, Status, Started, Finished, Duration, Priority, Comment
+- **Evidence column** shown on Passed with Evidence and Failed tabs — opens file viewer modal
+- **Defects column** shown on Failed tab — linked defect IDs resolved to Jira keys (e.g. `CHCCRM01-123`) and rendered as clickable red badges
 - Rows with 0-minute duration highlighted in red
-- Evidence files modal shows filename, size, date, and type icon
 
 ---
 
@@ -481,18 +494,22 @@ Handles authentication with Xray Cloud. POSTs to `/api/v2/authenticate` and retu
 GraphQL client with automatic pagination (PAGE_SIZE = 100). Returns per test run: `id`, `status.name`, `startedOn`, `finishedOn`, `executedById`, `comment`, `evidence[]`, `steps[].evidence[]`.
 
 ### [src/jiraClient.ts](src/jiraClient.ts)
-Jira REST API v3 client. Enriches test run rows with Jira issue data (key, summary, priority) using bulk JQL queries batched at 100 IDs per call to minimize API usage.
+Jira REST API v3 client. Exports two functions:
+- `fetchJiraIssuesByIds(ids, label?)` — core bulk lookup: accepts plain numeric Jira IDs, batches them at 100 per JQL call, and returns a `Map<id, { key, summary, priority }>`.
+- `fetchJiraIssuesForExecutions(executionKeys)` — wrapper that extracts the numeric ID from `"projectId:issueId"` execution keys and delegates to `fetchJiraIssuesByIds`.
 
 ### [src/confluenceClient.ts](src/confluenceClient.ts)
 Creates a Confluence page under the configured parent page. Only called when `CREATE_CONFLUENCE_PAGE=true`. Generates: KPI panels (pass rate, evidence coverage, failed, executing, pending), status donut chart, evidence bar chart, additional metrics table (avg duration, zero duration, over 6h), and three expand sections (zero duration runs, over 6h runs, passed without evidence). Empty executions note shown when applicable. Attaches SVG charts and the full HTML report. Authentication reuses `JIRA_AUTH_TOKEN` (same Atlassian account).
 
 ### [src/filters.ts](src/filters.ts)
-Filtering logic:
-- `findNoEvidenceTestRunsInExecutions()` — PASSED/FAILED runs with no evidence attached
+Filtering logic — four functions, each scanning all execution results and returning typed `TestRunNoEvidenceRow[]`:
+- `findNoEvidenceTestRunsInExecutions()` — completed runs (PASSED/FAILED) with no evidence
 - `findWithEvidenceTestRunsInExecutions()` — PASSED runs with at least one evidence file
+- `findFailedTestRunsInExecutions()` — FAILED/ERROR/BROKEN runs (with or without evidence)
+- `findPendingTestRunsInExecutions()` — TO DO runs awaiting execution
 
 ### [src/index.ts](src/index.ts)
-Main orchestrator. Coordinates: auth → fetch → validation → processing → Jira enrichment → HTML generation → file write → optional Confluence page. Also writes `recommendation` and `confluence_url` to `$GITHUB_OUTPUT` for downstream steps.
+Main orchestrator. Coordinates: auth → fetch → validation → processing → Jira enrichment (execution issues) → defect key resolution (failed runs) → HTML generation → file write → optional Confluence page. Also writes `recommendation` and `confluence_url` to `$GITHUB_OUTPUT` for downstream steps.
 
 ---
 
@@ -520,7 +537,7 @@ output/
 | Filename | `report-{RELEASE_VERSION}-{ISO_timestamp}.html` |
 | Size | ~40–60 KB (Chart.js loaded from CDN, styles and data embedded) |
 | Self-contained | Opens in any browser with no server required |
-| Interactive | Two-tab table, pagination, evidence file modal, chart legends |
+| Interactive | Four-tab table, pagination, evidence file modal, defect links, chart legends |
 
 ---
 
