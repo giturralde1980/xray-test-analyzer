@@ -70,7 +70,7 @@ The tool is **multi-project** — any Jira project within the organization can b
                        │
               ┌────────▼──────────────────────────────────────────┐
               │  Build JQL query                                   │
-              │  Replace XRAY_VERSION_PLACEHOLDER → RELEASE_VERSION│
+              │  Replace XRAY_VERSION_PLACEHOLDER → FIX_VERSION│
               │  Replace JIRA_PROJECT_PLACEHOLDER → JIRA_PROJECT   │
               └────────┬──────────────────────────────────────────┘
                        │
@@ -234,11 +234,11 @@ XRAY_CLIENT_SECRET=your_client_secret_here
 
 # ─── JQL & Filters ───────────────────────────────────────────────────────────
 # JIRA_PROJECT_PLACEHOLDER is replaced at runtime with the value of JIRA_PROJECT.
-# XRAY_VERSION_PLACEHOLDER is replaced at runtime with the value of RELEASE_VERSION.
+# XRAY_VERSION_PLACEHOLDER is replaced at runtime with the value of FIX_VERSION.
 XRAY_JQL=labels = "XRAY_VERSION_PLACEHOLDER" AND project = "JIRA_PROJECT_PLACEHOLDER" AND type = "test execution" ORDER BY created DESC
 
 JIRA_PROJECT=CHCCRM01
-RELEASE_VERSION=r14
+FIX_VERSION=R14.0.0
 
 # ─── Jira REST API ───────────────────────────────────────────────────────────
 JIRA_BASE_URL=https://your-org.atlassian.net
@@ -296,7 +296,7 @@ npm run analyze
 npm run dev
 ```
 
-The report is written to `output/report-{RELEASE_VERSION}-{timestamp}.html`.
+The report is written to `output/report-{FIX_VERSION}-{timestamp}.html`.
 
 ---
 
@@ -368,13 +368,15 @@ Go to **Actions** tab in GitHub → select _XRAY Evidence Report_ → **Run work
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `release_version` | Yes | `r14` | Release label to analyze (e.g. `r13`, `r14`) |
-| `use_sample_data` | No | `false` | Use mock data instead of real API |
+| `fix_version` | Yes | `R14.0.0` | Fix version to analyze (e.g. `R14.0.0`, `R15.0.0`) |
 | `jira_project` | No | `CHCCRM01` | Jira project key to filter |
+| `use_sample_data` | No | `false` | Use mock data instead of real API |
 | `create_confluence_page` | No | `false` | Create a Confluence summary page |
 | `confluence_space_key` | No | *(from secret)* | Confluence space key (overrides secret) |
 | `confluence_parent_page_id` | No | *(from secret)* | Confluence parent page ID (overrides secret) |
 | `create_salesforce_object` | No | `false` | Create an Evidence__c record in Salesforce and upload the HTML report |
+| `send_email` | No | `false` | Send the report by email |
+| `email_to` | No | *(from secret)* | Recipients comma-separated (overrides secret MAIL_TO) |
 
 ---
 
@@ -394,7 +396,7 @@ Content-Type: application/json
 {
   "event_type": "xray-report",
   "client_payload": {
-    "release_version": "r14",
+    "fix_version": "R14.0.0",
     "use_sample_data": "false"
   }
 }
@@ -406,7 +408,7 @@ Content-Type: application/json
 {
   "event_type": "xray-report",
   "client_payload": {
-    "release_version": "r14",
+    "fix_version": "R14.0.0",
     "email_to": "test@test.com",
     "use_sample_data": "false",
     "jira_project": "CHCCRM01",
@@ -424,7 +426,7 @@ Content-Type: application/json
 {
   "event_type": "xray-report",
   "client_payload": {
-    "release_version": "r14",
+    "fix_version": "R14.0.0",
     "use_sample_data": "false",
     "jira_project": "CHCCRM01",
     "create_confluence_page": "true",
@@ -446,7 +448,7 @@ Manual input (workflow_dispatch) → client_payload → GitHub Secret → code d
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `RELEASE_VERSION` | Yes | — | Release label (e.g. `r14`). Replaces `XRAY_VERSION_PLACEHOLDER` in the JQL. |
+| `FIX_VERSION` | Yes | — | Fix version (e.g. `R14.0.0`, `R15.0.0`). Replaces `XRAY_VERSION_PLACEHOLDER` in the JQL. |
 | `JIRA_PROJECT` | No | `CHCCRM01` | Jira project key. Replaces `JIRA_PROJECT_PLACEHOLDER` in the JQL. |
 | `XRAY_API_BASE_URL` | No | `https://xray.cloud.getxray.app/api/v2` | Xray Cloud API base URL |
 | `XRAY_CLIENT_ID` | Yes | — | 32-char hex Client ID from Xray Cloud API Keys |
@@ -534,7 +536,7 @@ output/
 
 | Property | Detail |
 |----------|--------|
-| Filename | `report-{RELEASE_VERSION}-{ISO_timestamp}.html` |
+| Filename | `report-{FIX_VERSION}-{timestamp}.html` (e.g. `report-R15.0.0-2026-05-17T10-30-00.html`) |
 | Size | ~40–60 KB (Chart.js loaded from CDN, styles and data embedded) |
 | Self-contained | Opens in any browser with no server required |
 | Interactive | Four-tab table, pagination, evidence file modal, defect links, chart legends |
@@ -558,7 +560,7 @@ Items identified during development that require a business or technical decisio
 - Should the filter combine both fields? e.g. `fixVersion = "r15.0.0" AND labels = "UAT"`
 - Is the `UAT` label required to exclude SIT executions, or is there another way to differentiate them?
 
-**Impact:** Once the team defines the convention, the change in code is minimal (two lines in `src/config.ts` and `RELEASE_VERSION` format in `.env`). The important thing is that the convention is documented and followed consistently from that release forward.
+**Impact:** Once the team defines the convention, the change in code is minimal (two lines in `src/config.ts` and `FIX_VERSION` format in `.env`). The important thing is that the convention is documented and followed consistently from that release forward.
 
 ---
 
